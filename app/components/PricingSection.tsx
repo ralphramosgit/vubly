@@ -76,21 +76,21 @@ const PricingSection = () => {
           {/* Pricing toggle */}
           <div className="flex items-center justify-center space-x-4 mb-12">
             <span
-              className={`text-sm font-medium ${isAnnual ? "text-saas-orange" : "text-gray-400"}`}
+              className={`text-sm font-medium ${isAnnual ? "text-saas-yellow" : "text-gray-400"}`}
             >
               Annual{" "}
-              <span className="text-xs text-saas-orange">(Save 20%)</span>
+              <span className="text-xs text-saas-yellow">(Save 20%)</span>
             </span>
             <button
               onClick={() => setIsAnnual(!isAnnual)}
-              className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors ${isAnnual ? "bg-saas-orange" : "bg-gray-600"}`}
+              className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors ${isAnnual ? "bg-saas-yellow" : "bg-gray-600"}`}
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isAnnual ? "translate-x-7" : "translate-x-1"}`}
+                className={`inline-block h-4 w-4 transform rounded-full bg-black transition-transform ${isAnnual ? "translate-x-7" : "translate-x-1"}`}
               />
             </button>
             <span
-              className={`text-sm font-medium ${!isAnnual ? "text-saas-orange" : "text-gray-400"}`}
+              className={`text-sm font-medium ${!isAnnual ? "text-saas-yellow" : "text-gray-400"}`}
             >
               Monthly
             </span>
@@ -103,12 +103,12 @@ const PricingSection = () => {
               key={index}
               className={`rounded-2xl p-8 transition-all duration-300 ${
                 plan.isPopular
-                  ? "bg-gradient-to-b from-saas-orange/20 to-saas-black border border-saas-orange/30 transform hover:-translate-y-2"
+                  ? "bg-gradient-to-b from-saas-yellow/20 to-saas-black border border-saas-yellow/30 transform hover:-translate-y-2"
                   : "bg-saas-darkGray border border-gray-800 transform hover:-translate-y-1"
               }`}
             >
               {plan.isPopular && (
-                <span className="bg-saas-orange text-saas-black text-xs font-bold px-3 py-1 rounded-full uppercase mb-4 inline-block">
+                <span className="bg-saas-yellow text-saas-black text-xs font-bold px-3 py-1 rounded-full uppercase mb-4 inline-block">
                   Most Popular
                 </span>
               )}
@@ -126,7 +126,7 @@ const PricingSection = () => {
               <ul className="space-y-4 mb-8">
                 {plan.features.map((feature, i) => (
                   <li key={i} className="flex items-start">
-                    <Check className="h-5 w-5 text-saas-orange mr-2 shrink-0" />
+                    <Check className="h-5 w-5 text-saas-yellow mr-2 shrink-0" />
                     <span className="text-gray-300">{feature}</span>
                   </li>
                 ))}
@@ -135,8 +135,8 @@ const PricingSection = () => {
               <Button
                 className={`w-full ${
                   plan.isPopular
-                    ? "bg-saas-orange hover:bg-orange-600 text-white"
-                    : "bg-secondary border border-saas-orange/30 hover:border-saas-orange text-white"
+                    ? "bg-saas-yellow hover:bg-[#E6E600] text-black"
+                    : "bg-secondary border border-saas-yellow/30 hover:border-saas-yellow hover:bg-saas-yellow/10 text-white"
                 }`}
               >
                 {plan.ctaText}

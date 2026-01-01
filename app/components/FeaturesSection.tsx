@@ -4,32 +4,32 @@ import { Check, Search, Settings, User, Home, Calendar } from 'lucide-react';
 
 const features = [
   {
-    icon: <Search className="h-6 w-6 text-saas-orange" />,
+    icon: <Search className="h-6 w-6 text-saas-yellow" />,
     title: 'Smart Analytics',
     description: 'Gain valuable insights with our advanced analytics, helping you make data-driven decisions.'
   },
   {
-    icon: <Settings className="h-6 w-6 text-saas-orange" />,
+    icon: <Settings className="h-6 w-6 text-saas-yellow" />,
     title: 'Easy Integration',
     description: 'Seamlessly integrate with your existing tools and workflows. No disruption to your business.'
   },
   {
-    icon: <User className="h-6 w-6 text-saas-orange" />,
+    icon: <User className="h-6 w-6 text-saas-yellow" />,
     title: 'User Management',
     description: 'Powerful user management and permission controls to keep your data secure and accessible.'
   },
   {
-    icon: <Home className="h-6 w-6 text-saas-orange" />,
+    icon: <Home className="h-6 w-6 text-saas-yellow" />,
     title: 'Customizable Dashboard',
     description: 'Create custom dashboards tailored to your specific needs and business goals.'
   },
   {
-    icon: <Calendar className="h-6 w-6 text-saas-orange" />,
+    icon: <Calendar className="h-6 w-6 text-saas-yellow" />,
     title: 'Task Scheduler',
     description: 'Automate your workflows with our powerful task scheduling system.'
   },
   {
-    icon: <Check className="h-6 w-6 text-saas-orange" />,
+    icon: <Check className="h-6 w-6 text-saas-yellow" />,
     title: 'Progress Tracking',
     description: 'Monitor your team\'s progress and achievements with real-time reporting.'
   }
@@ -53,10 +53,10 @@ const FeaturesSection = () => {
           {features.map((feature, index) => (
             <div 
               key={index} 
-              className="bg-saas-darkGray p-6 rounded-xl border border-gray-800 hover:border-saas-orange/50 transition-all duration-300 card-shadow"
+              className="bg-saas-darkGray p-6 rounded-xl border border-gray-800 hover:border-saas-yellow/50 transition-all duration-300 card-shadow"
               style={{animationDelay: `${index * 0.1}s`}}
             >
-              <div className="bg-saas-orange/10 w-12 h-12 flex items-center justify-center rounded-lg mb-4">
+              <div className="bg-saas-yellow/10 w-12 h-12 flex items-center justify-center rounded-lg mb-4">
                 {feature.icon}
               </div>
               <h3 className="text-xl font-semibold mb-2 text-white">{feature.title}</h3>

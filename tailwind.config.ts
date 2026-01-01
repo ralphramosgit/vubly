@@ -54,7 +54,7 @@ export default {
           foreground: "hsl(var(--card-foreground))",
         },
         saas: {
-          orange: "#F97316",
+          yellow: "#FFFC00",
           black: "#121212",
           darkGray: "#222222",
           lightGray: "#F8F8F8",

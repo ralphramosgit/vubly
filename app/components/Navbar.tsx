@@ -25,8 +25,8 @@ const Navbar = () => {
           {/* Logo */}
           <div className="flex-shrink-0 flex items-center">
             <Link href="/" className="flex items-center">
-              <span className="text-2xl font-bold bg-gradient-to-r from-saas-orange to-amber-500 bg-clip-text text-transparent">
-                Sassland
+              <span className="text-2xl font-bold bg-gradient-to-r from-saas-yellow to-yellow-400 bg-clip-text text-transparent">
+                Vubly
               </span>
             </Link>
           </div>
@@ -38,28 +38,28 @@ const Navbar = () => {
                 href="/"
                 className={`px-3 py-2 text-sm font-medium transition-colors ${
                   isActive("/")
-                    ? "text-saas-orange"
-                    : "text-white hover:text-saas-orange"
+                    ? "text-saas-yellow"
+                    : "text-white hover:text-saas-yellow"
                 }`}
               >
                 Home
               </Link>
               <Link
-                href="/roadmap"
+                href="/videoInput"
                 className={`px-3 py-2 text-sm font-medium transition-colors ${
-                  isActive("/roadmap")
-                    ? "text-saas-orange"
-                    : "text-white hover:text-saas-orange"
+                  isActive("/videoInput")
+                    ? "text-saas-yellow"
+                    : "text-white hover:text-saas-yellow"
                 }`}
               >
-                Roadmap
+                Video Input
               </Link>
-              <Link
+              {/* <Link
                 href="/pricing"
                 className={`px-3 py-2 text-sm font-medium transition-colors ${
                   isActive("/pricing")
-                    ? "text-saas-orange"
-                    : "text-white hover:text-saas-orange"
+                    ? "text-saas-yellow"
+                    : "text-white hover:text-saas-yellow"
                 }`}
               >
                 Pricing
@@ -68,8 +68,8 @@ const Navbar = () => {
                 href="/contact"
                 className={`px-3 py-2 text-sm font-medium transition-colors ${
                   isActive("/contact")
-                    ? "text-saas-orange"
-                    : "text-white hover:text-saas-orange"
+                    ? "text-saas-yellow"
+                    : "text-white hover:text-saas-yellow"
                 }`}
               >
                 Contact
@@ -78,12 +78,12 @@ const Navbar = () => {
                 href="/blog"
                 className={`px-3 py-2 text-sm font-medium transition-colors ${
                   isActive("/blog") || pathname.startsWith("/blog")
-                    ? "text-saas-orange"
-                    : "text-white hover:text-saas-orange"
+                    ? "text-saas-yellow"
+                    : "text-white hover:text-saas-yellow"
                 }`}
               >
                 Blog
-              </Link>
+              </Link> */}
             </div>
           </div>
 
@@ -123,8 +123,8 @@ const Navbar = () => {
               href="/"
               className={`block px-3 py-2 text-base font-medium ${
                 isActive("/")
-                  ? "text-saas-orange"
-                  : "text-white hover:text-saas-orange"
+                  ? "text-saas-yellow"
+                  : "text-white hover:text-saas-yellow"
               }`}
               onClick={() => setIsOpen(false)}
             >
@@ -134,8 +134,8 @@ const Navbar = () => {
               href="/roadmap"
               className={`block px-3 py-2 text-base font-medium ${
                 isActive("/roadmap")
-                  ? "text-saas-orange"
-                  : "text-white hover:text-saas-orange"
+                  ? "text-saas-yellow"
+                  : "text-white hover:text-saas-yellow"
               }`}
               onClick={() => setIsOpen(false)}
             >
@@ -145,8 +145,8 @@ const Navbar = () => {
               href="/pricing"
               className={`block px-3 py-2 text-base font-medium ${
                 isActive("/pricing")
-                  ? "text-saas-orange"
-                  : "text-white hover:text-saas-orange"
+                  ? "text-saas-yellow"
+                  : "text-white hover:text-saas-yellow"
               }`}
               onClick={() => setIsOpen(false)}
             >
@@ -156,8 +156,8 @@ const Navbar = () => {
               href="/contact"
               className={`block px-3 py-2 text-base font-medium ${
                 isActive("/contact")
-                  ? "text-saas-orange"
-                  : "text-white hover:text-saas-orange"
+                  ? "text-saas-yellow"
+                  : "text-white hover:text-saas-yellow"
               }`}
               onClick={() => setIsOpen(false)}
             >
@@ -167,8 +167,8 @@ const Navbar = () => {
               href="/blog"
               className={`block px-3 py-2 text-base font-medium ${
                 isActive("/blog") || pathname.startsWith("/blog")
-                  ? "text-saas-orange"
-                  : "text-white hover:text-saas-orange"
+                  ? "text-saas-yellow"
+                  : "text-white hover:text-saas-yellow"
               }`}
               onClick={() => setIsOpen(false)}
             >

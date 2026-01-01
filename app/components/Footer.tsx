@@ -9,7 +9,7 @@ const Footer = () => {
           {/* Company info */}
           <div className="col-span-1 md:col-span-1">
             <a href="#" className="inline-block mb-4">
-              <span className="text-2xl font-bold bg-gradient-to-r from-saas-orange to-amber-500 bg-clip-text text-transparent">
+              <span className="text-2xl font-bold bg-gradient-to-r from-saas-yellow to-yellow-400 bg-clip-text text-transparent">
                 Sassland
               </span>
             </a>
@@ -20,7 +20,7 @@ const Footer = () => {
             <div className="flex space-x-4">
               <a
                 href="#"
-                className="text-gray-400 hover:text-saas-orange transition-colors"
+                className="text-gray-400 hover:text-saas-yellow transition-colors"
               >
                 <svg
                   className="h-5 w-5"
@@ -37,7 +37,7 @@ const Footer = () => {
               </a>
               <a
                 href="#"
-                className="text-gray-400 hover:text-saas-orange transition-colors"
+                className="text-gray-400 hover:text-saas-yellow transition-colors"
               >
                 <svg
                   className="h-5 w-5"
@@ -50,7 +50,7 @@ const Footer = () => {
               </a>
               <a
                 href="#"
-                className="text-gray-400 hover:text-saas-orange transition-colors"
+                className="text-gray-400 hover:text-saas-yellow transition-colors"
               >
                 <svg
                   className="h-5 w-5"
@@ -67,7 +67,7 @@ const Footer = () => {
               </a>
               <a
                 href="#"
-                className="text-gray-400 hover:text-saas-orange transition-colors"
+                className="text-gray-400 hover:text-saas-yellow transition-colors"
               >
                 <svg
                   className="h-5 w-5"
@@ -92,7 +92,7 @@ const Footer = () => {
               <li>
                 <a
                   href="#"
-                  className="text-gray-400 hover:text-saas-orange transition-colors"
+                  className="text-gray-400 hover:text-saas-yellow transition-colors"
                 >
                   Home
                 </a>
@@ -100,7 +100,7 @@ const Footer = () => {
               <li>
                 <a
                   href="#"
-                  className="text-gray-400 hover:text-saas-orange transition-colors"
+                  className="text-gray-400 hover:text-saas-yellow transition-colors"
                 >
                   Roadmap
                 </a>
@@ -108,7 +108,7 @@ const Footer = () => {
               <li>
                 <a
                   href="#"
-                  className="text-gray-400 hover:text-saas-orange transition-colors"
+                  className="text-gray-400 hover:text-saas-yellow transition-colors"
                 >
                   Pricing
                 </a>
@@ -116,7 +116,7 @@ const Footer = () => {
               <li>
                 <a
                   href="#"
-                  className="text-gray-400 hover:text-saas-orange transition-colors"
+                  className="text-gray-400 hover:text-saas-yellow transition-colors"
                 >
                   Documentation
                 </a>
@@ -124,7 +124,7 @@ const Footer = () => {
               <li>
                 <a
                   href="#"
-                  className="text-gray-400 hover:text-saas-orange transition-colors"
+                  className="text-gray-400 hover:text-saas-yellow transition-colors"
                 >
                   Features
                 </a>
@@ -139,7 +139,7 @@ const Footer = () => {
               <li>
                 <a
                   href="#"
-                  className="text-gray-400 hover:text-saas-orange transition-colors"
+                  className="text-gray-400 hover:text-saas-yellow transition-colors"
                 >
                   Blog
                 </a>
@@ -147,7 +147,7 @@ const Footer = () => {
               <li>
                 <a
                   href="#"
-                  className="text-gray-400 hover:text-saas-orange transition-colors"
+                  className="text-gray-400 hover:text-saas-yellow transition-colors"
                 >
                   Contact Us
                 </a>
@@ -155,7 +155,7 @@ const Footer = () => {
               <li>
                 <a
                   href="#"
-                  className="text-gray-400 hover:text-saas-orange transition-colors"
+                  className="text-gray-400 hover:text-saas-yellow transition-colors"
                 >
                   About
                 </a>
@@ -163,7 +163,7 @@ const Footer = () => {
               <li>
                 <a
                   href="#"
-                  className="text-gray-400 hover:text-saas-orange transition-colors"
+                  className="text-gray-400 hover:text-saas-yellow transition-colors"
                 >
                   Careers
                 </a>
@@ -178,7 +178,7 @@ const Footer = () => {
               <li>
                 <a
                   href="#"
-                  className="text-gray-400 hover:text-saas-orange transition-colors"
+                  className="text-gray-400 hover:text-saas-yellow transition-colors"
                 >
                   Privacy Policy
                 </a>
@@ -186,7 +186,7 @@ const Footer = () => {
               <li>
                 <a
                   href="#"
-                  className="text-gray-400 hover:text-saas-orange transition-colors"
+                  className="text-gray-400 hover:text-saas-yellow transition-colors"
                 >
                   Terms & Conditions
                 </a>
@@ -194,7 +194,7 @@ const Footer = () => {
               <li>
                 <a
                   href="#"
-                  className="text-gray-400 hover:text-saas-orange transition-colors"
+                  className="text-gray-400 hover:text-saas-yellow transition-colors"
                 >
                   Cookie Policy
                 </a>
@@ -202,7 +202,7 @@ const Footer = () => {
               <li>
                 <a
                   href="#"
-                  className="text-gray-400 hover:text-saas-orange transition-colors"
+                  className="text-gray-400 hover:text-saas-yellow transition-colors"
                 >
                   GDPR
                 </a>
@@ -223,7 +223,7 @@ const Footer = () => {
               href="https://themewagon.com/"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-saas-orange hover:underline"
+              className="text-saas-yellow hover:underline"
             >
               ThemeWagon
             </a>
