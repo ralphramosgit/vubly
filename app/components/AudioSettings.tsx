@@ -16,7 +16,7 @@ export default function AudioSettings() {
       <div className="mb-3 md:mb-4">
         <div className="border-2 border-saas-yellow rounded-2xl p-2 md:p-3 mb-3">
           <h3 className="text-saas-yellow text-center font-bold mb-2 text-sm md:text-base">
-            voice
+            Voice
           </h3>
           <div className="grid grid-cols-4 gap-1.5 md:gap-2">
             {voices.map((voice, index) => (
@@ -41,7 +41,7 @@ export default function AudioSettings() {
         {/* Language Selection */}
         <div className="border-2 border-saas-yellow rounded-2xl p-2 md:p-3 mb-3">
           <h3 className="text-saas-yellow text-center font-bold mb-2 text-sm md:text-base">
-            language
+            Language
           </h3>
           <div className="space-y-1.5 md:space-y-2">
             {languages.map((language, index) => (
