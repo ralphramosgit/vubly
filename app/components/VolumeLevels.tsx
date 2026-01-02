@@ -6,6 +6,12 @@ export default function VolumeLevels() {
   const [originalVolume, setOriginalVolume] = useState(50);
   const [newVolume, setNewVolume] = useState(70);
 
+  const verticalSliderStyle = {
+    writingMode: "vertical-lr" as const,
+    WebkitAppearance: "slider-vertical" as const,
+    width: "8px",
+  };
+
   return (
     <div className="border-2 border-saas-yellow rounded-3xl p-6 h-fit">
       <div className="flex gap-8 items-center justify-center h-80">
@@ -18,12 +24,7 @@ export default function VolumeLevels() {
             value={originalVolume}
             onChange={(e) => setOriginalVolume(Number(e.target.value))}
             className="h-64 slider-vertical"
-            orient="vertical"
-            style={{
-              writingMode: "bt-lr",
-              WebkitAppearance: "slider-vertical",
-              width: "8px",
-            }}
+            style={verticalSliderStyle}
           />
           <span className="text-white font-semibold">original</span>
         </div>
@@ -37,12 +38,7 @@ export default function VolumeLevels() {
             value={newVolume}
             onChange={(e) => setNewVolume(Number(e.target.value))}
             className="h-64 slider-vertical"
-            orient="vertical"
-            style={{
-              writingMode: "bt-lr",
-              WebkitAppearance: "slider-vertical",
-              width: "8px",
-            }}
+            style={verticalSliderStyle}
           />
           <span className="text-white font-semibold">translated</span>
         </div>
