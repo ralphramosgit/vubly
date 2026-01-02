@@ -6,12 +6,31 @@ import os from "os";
 
 const execAsync = promisify(exec);
 
-// Hardcode the yt-dlp path that we know exists
-const ytdlpPath = `"C:\\Users\\ralph\\AppData\\Local\\Microsoft\\WinGet\\Packages\\yt-dlp.yt-dlp_Microsoft.Winget.Source_8wekyb3d8bbwe\\yt-dlp.exe"`;
-const ffmpegLocation = ` --ffmpeg-location "C:\\Users\\ralph\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-8.0.1-full_build\\bin"`;
+// Detect environment and use appropriate paths
+const isWindows = os.platform() === "win32";
 
-console.log(`Using yt-dlp: ${ytdlpPath}`);
-console.log(`Using ffmpeg: ${ffmpegLocation}`);
+let ytdlpPath: string;
+let ffmpegLocation: string;
+
+if (isWindows) {
+  // Local Windows development - with quotes for spaces in path
+  ytdlpPath = `"C:\\Users\\ralph\\AppData\\Local\\Microsoft\\WinGet\\Packages\\yt-dlp.yt-dlp_Microsoft.Winget.Source_8wekyb3d8bbwe\\yt-dlp.exe"`;
+  ffmpegLocation = ` --ffmpeg-location "C:\\Users\\ralph\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-8.0.1-full_build\\bin"`;
+} else {
+  // Linux/Vercel production - use downloaded binary
+  const binaryPath = path.join(process.cwd(), "bin", "yt-dlp");
+  ytdlpPath = `"${binaryPath}"`;
+  ffmpegLocation = ""; // System ffmpeg
+  console.log("Using yt-dlp binary at:", binaryPath);
+  console.log("Binary exists:", fs.existsSync(binaryPath));
+  if (fs.existsSync(binaryPath)) {
+    const stats = fs.statSync(binaryPath);
+    console.log("Binary is executable:", (stats.mode & 0o111) !== 0);
+    console.log("Binary size:", stats.size);
+  }
+}
+
+console.log(`Platform: ${os.platform()}, yt-dlp path:`, ytdlpPath);
 
 export function extractVideoId(url: string): string | null {
   const patterns = [
@@ -33,13 +52,13 @@ export async function downloadAudio(videoId: string): Promise<Buffer> {
   const outputPath = path.join(tempDir, `${videoId}_audio.mp3`);
 
   try {
-    // Use yt-dlp to download audio only
+    // Use yt-dlp with aggressive bypass options
     await execAsync(
-      `${ytdlpPath}${ffmpegLocation} -x --audio-format mp3 --audio-quality 0 -o "${outputPath}" "${url}"`,
-      { maxBuffer: 50 * 1024 * 1024 }
+      `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=android,web;player_skip=webpage,configs" --user-agent "com.google.android.youtube/19.09.37 (Linux; U; Android 13) gzip" --no-check-certificates --extractor-retries 3 -x --audio-format mp3 --audio-quality 0 -o "${outputPath}" "${url}"`,
+      { maxBuffer: 50 * 1024 * 1024, timeout: 120000 }
     );
 
-    // Check if file exists (yt-dlp might have created it)
+    // Check if file exists
     if (!fs.existsSync(outputPath)) {
       throw new Error(`Audio file not created at ${outputPath}`);
     }
@@ -47,12 +66,27 @@ export async function downloadAudio(videoId: string): Promise<Buffer> {
     const audioBuffer = fs.readFileSync(outputPath);
 
     // Clean up temp file
-    fs.unlinkSync(outputPath);
+    try {
+      fs.unlinkSync(outputPath);
+    } catch {
+      console.warn(`Failed to cleanup temp audio file: ${outputPath}`);
+    }
 
     return audioBuffer;
   } catch (error: unknown) {
+    // Ensure cleanup even on error
+    try {
+      if (fs.existsSync(outputPath)) {
+        fs.unlinkSync(outputPath);
+      }
+    } catch {
+      console.warn(`Failed to cleanup temp audio file on error: ${outputPath}`);
+    }
+
     console.error("yt-dlp audio download error:", error);
-    throw new Error(`Failed to download audio: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `Failed to download audio: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
 
@@ -62,10 +96,10 @@ export async function downloadVideo(videoId: string): Promise<Buffer> {
   const outputPath = path.join(tempDir, `${videoId}_video.mp4`);
 
   try {
-    // Use yt-dlp to download video (no audio, for syncing with translated audio)
+    // Use yt-dlp with aggressive bypass options
     await execAsync(
-      `${ytdlpPath}${ffmpegLocation} -f "bestvideo[ext=mp4]/best[ext=mp4]" -o "${outputPath}" "${url}"`,
-      { maxBuffer: 100 * 1024 * 1024 }
+      `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=android,web;player_skip=webpage,configs" --user-agent "com.google.android.youtube/19.09.37 (Linux; U; Android 13) gzip" --no-check-certificates --extractor-retries 3 -f "bestvideo[ext=mp4]/best[ext=mp4]" -o "${outputPath}" "${url}"`,
+      { maxBuffer: 100 * 1024 * 1024, timeout: 120000 }
     );
 
     // Check if file exists
@@ -76,36 +110,93 @@ export async function downloadVideo(videoId: string): Promise<Buffer> {
     const videoBuffer = fs.readFileSync(outputPath);
 
     // Clean up temp file
-    fs.unlinkSync(outputPath);
+    try {
+      fs.unlinkSync(outputPath);
+    } catch {
+      console.warn(`Failed to cleanup temp video file: ${outputPath}`);
+    }
 
     return videoBuffer;
   } catch (error: unknown) {
+    // Ensure cleanup even on error
+    try {
+      if (fs.existsSync(outputPath)) {
+        fs.unlinkSync(outputPath);
+      }
+    } catch {
+      console.warn(`Failed to cleanup temp video file on error: ${outputPath}`);
+    }
+
     console.error("yt-dlp video download error:", error);
-    throw new Error(`Failed to download video: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `Failed to download video: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
 
 export async function getVideoInfo(videoId: string) {
-  const url = `https://www.youtube.com/watch?v=${videoId}`;
-
   try {
-    // Use yt-dlp to get video info as JSON
-    const { stdout } = await execAsync(
-      `${ytdlpPath} --js-runtimes deno --dump-json --no-download "${url}"`,
-      { maxBuffer: 10 * 1024 * 1024 }
+    // Use YouTube Data API instead of yt-dlp (YouTube blocks yt-dlp)
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (!apiKey) {
+      throw new Error("YOUTUBE_API_KEY not configured");
+    }
+
+    const response = await fetch(
+      `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&key=${apiKey}&part=snippet,contentDetails`
     );
 
-    const info = JSON.parse(stdout);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("YouTube API error response:", errorText);
+      throw new Error(`YouTube API error: ${response.statusText}`);
+    }
 
-    return {
+    const data = await response.json();
+
+    if (!data.items || data.items.length === 0) {
+      console.error("Video not found for ID:", videoId);
+      throw new Error("Video not found or is private");
+    }
+
+    const video = data.items[0];
+
+    if (!video.snippet) {
+      console.error("Video missing snippet data:", video);
+      throw new Error("Video data incomplete");
+    }
+
+    // Parse ISO 8601 duration (PT1H2M3S) to seconds
+    const duration = parseDuration(video.contentDetails?.duration || "PT0S");
+
+    const videoInfo = {
       id: videoId,
-      title: info.title || "Unknown Title",
-      duration: info.duration || 0,
-      thumbnail: info.thumbnail || info.thumbnails?.[0]?.url || "",
-      author: info.uploader || info.channel || "Unknown Author",
+      title: video.snippet.title || "Unknown Title",
+      duration: duration,
+      thumbnail:
+        video.snippet.thumbnails?.high?.url ||
+        video.snippet.thumbnails?.default?.url ||
+        "",
+      author: video.snippet.channelTitle || "Unknown Author",
     };
+
+    console.log("Successfully fetched video info:", videoInfo);
+    return videoInfo;
   } catch (error: unknown) {
-    console.error("yt-dlp info error:", error);
-    throw new Error(`Failed to get video info: ${error instanceof Error ? error.message : String(error)}`);
+    console.error("YouTube API error:", error);
+    throw new Error(
+      `Failed to get video info: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
+}
+
+function parseDuration(isoDuration: string): number {
+  const match = isoDuration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!match) return 0;
+
+  const hours = parseInt(match[1] || "0");
+  const minutes = parseInt(match[2] || "0");
+  const seconds = parseInt(match[3] || "0");
+
+  return hours * 3600 + minutes * 60 + seconds;
 }

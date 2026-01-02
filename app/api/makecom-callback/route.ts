@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     const translatedAudioBuffer = Buffer.from(audioData, "base64");
 
     // Update session with translated content
-    updateSession(sessionId, {
+    await updateSession(sessionId, {
       translatedText: translation,
       translatedAudio: translatedAudioBuffer,
       status: "completed",

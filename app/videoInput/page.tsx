@@ -157,8 +157,8 @@ export default function VideoUpload() {
               <div className="text-center text-gray-400 text-sm">
                 <p>This may take a few minutes...</p>
                 <p className="mt-2">
-                  We&apos;re downloading the audio, transcribing it, and translating
-                  it for you.
+                  We&apos;re downloading the audio, transcribing it, and
+                  translating it for you.
                 </p>
               </div>
             )}

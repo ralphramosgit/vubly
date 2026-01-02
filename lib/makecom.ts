@@ -39,6 +39,8 @@ export async function sendToMakeWebhook(
     };
   } catch (error: unknown) {
     console.error("Failed to trigger Make.com webhook:", error);
-    throw new Error(`Failed to trigger webhook: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `Failed to trigger webhook: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }

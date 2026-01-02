@@ -38,9 +38,38 @@ function DashboardContent() {
   useEffect(() => {
     if (!sessionId) return;
 
+    let pollCount = 0;
+    const maxPolls = 150; // 5 minutes at 2 second intervals
+
     const pollStatus = async () => {
       try {
         const response = await fetch(`/api/session/${sessionId}`);
+
+        if (!response.ok) {
+          pollCount++;
+          if (pollCount >= 5) {
+            // After 5 failed attempts (10 seconds), show error
+            clearInterval(interval);
+            setSession({
+              id: sessionId,
+              videoId: "",
+              videoInfo: {
+                id: "",
+                title: "Session Not Found",
+                duration: 0,
+                thumbnail: "",
+                author: "",
+              },
+              status: "error",
+              error:
+                "Session not found. The video processing may have failed or the session expired.",
+              hasOriginalAudio: false,
+              hasTranslatedAudio: false,
+            });
+          }
+          return;
+        }
+
         const data = await response.json();
         setSession(data);
 
@@ -48,23 +77,22 @@ function DashboardContent() {
         if (data.status === "completed" || data.status === "error") {
           clearInterval(interval);
         }
+
+        pollCount++;
+        if (pollCount >= maxPolls) {
+          clearInterval(interval);
+        }
       } catch (error) {
         console.error("Failed to fetch status:", error);
+        pollCount++;
       }
     };
 
     pollStatus();
     const interval = setInterval(pollStatus, 2000);
 
-    // Stop polling after 5 minutes max
-    const maxPollTimeout = setTimeout(() => {
-      clearInterval(interval);
-      console.log("Polling stopped after 5 minutes");
-    }, 300000);
-
     return () => {
       clearInterval(interval);
-      clearTimeout(maxPollTimeout);
     };
   }, [sessionId]);
 
@@ -89,6 +117,18 @@ function DashboardContent() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-saas-yellow mx-auto mb-4"></div>
           <p className="text-gray-400 text-lg">Loading session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Extra validation for videoInfo
+  if (!session.videoInfo) {
+    return (
+      <div className="min-h-screen bg-saas-black text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-saas-yellow mx-auto mb-4"></div>
+          <p className="text-gray-400 text-lg">Loading video information...</p>
         </div>
       </div>
     );
@@ -174,14 +214,16 @@ function DashboardContent() {
 
 export default function Dashboard() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-saas-black text-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-saas-yellow mx-auto mb-4"></div>
-          <p className="text-gray-400 text-lg">Loading...</p>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-saas-black text-white flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-saas-yellow mx-auto mb-4"></div>
+            <p className="text-gray-400 text-lg">Loading...</p>
+          </div>
         </div>
-      </div>
-    }>
+      }
+    >
       <DashboardContent />
     </Suspense>
   );

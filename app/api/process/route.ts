@@ -38,10 +38,16 @@ export async function POST(req: NextRequest) {
     const videoInfo = await getVideoInfo(videoId);
 
     // Create session
-    const sessionId = createSession(videoId, videoInfo);
+    const sessionId = await createSession(videoId, videoInfo);
 
-    // Start async processing
-    processVideo(sessionId, videoId, targetLanguage, voiceId);
+    // Start processing and WAIT for webhook to be triggered
+    // This keeps the connection alive so Vercel doesn't kill the background work
+    await processVideoAndTriggerWebhook(
+      sessionId,
+      videoId,
+      targetLanguage,
+      voiceId
+    );
 
     return NextResponse.json({
       success: true,
@@ -57,64 +63,103 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function processVideo(
+async function processVideoAndTriggerWebhook(
   sessionId: string,
   videoId: string,
   targetLanguage: string,
   voiceId: string
 ) {
   try {
-    // Step 1: Download audio and video in parallel
+    // Step 1: Download audio and video in parallel with timeout
     console.log(`[${sessionId}] Downloading audio and video...`);
-    updateSession(sessionId, { status: "processing" });
+    await updateSession(sessionId, { status: "processing" });
 
-    const [audioBuffer, videoBuffer] = await Promise.all([
+    const downloadPromise = Promise.all([
       downloadAudio(videoId),
       downloadVideo(videoId),
     ]);
 
-    updateSession(sessionId, { originalAudio: audioBuffer, videoBuffer });
+    // Add 60-second timeout for downloads
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error("Download timeout after 60 seconds")),
+        60000
+      )
+    );
+
+    const [audioBuffer, videoBuffer] = await Promise.race([
+      downloadPromise,
+      timeoutPromise,
+    ]);
+
+    await updateSession(sessionId, { originalAudio: audioBuffer, videoBuffer });
     console.log(`[${sessionId}] Audio downloaded: ${audioBuffer.length} bytes`);
     console.log(`[${sessionId}] Video downloaded: ${videoBuffer.length} bytes`);
 
     // Step 2: Transcribe
-    console.log(`[${sessionId}] Transcribing audio...`);
-    const transcription = await transcribeAudio(audioBuffer);
-    const transcript = transcription.text;
-    updateSession(sessionId, { transcript });
-    console.log(
-      `[${sessionId}] Transcription complete: ${transcript.substring(0, 100)}...`
-    );
+    console.log(`[${sessionId}] Starting transcription...`);
+    let transcript = "";
+    try {
+      const transcription = await transcribeAudio(audioBuffer);
+      transcript = transcription.text;
+      await updateSession(sessionId, { transcript });
+      console.log(
+        `[${sessionId}] Transcription complete: ${transcript.substring(0, 100)}...`
+      );
+    } catch (transcribeError) {
+      console.error(`[${sessionId}] TRANSCRIPTION FAILED:`, transcribeError);
+      throw transcribeError;
+    }
 
     // Step 3: Detect language
-    console.log(`[${sessionId}] Detecting language...`);
-    const detectedLanguage = await detectLanguage(transcript);
-    updateSession(sessionId, { detectedLanguage });
-    console.log(`[${sessionId}] Detected language: ${detectedLanguage}`);
+    console.log(`[${sessionId}] Starting language detection...`);
+    let detectedLanguage = "en";
+    try {
+      detectedLanguage = await detectLanguage(transcript);
+      await updateSession(sessionId, { detectedLanguage });
+      console.log(`[${sessionId}] Language detected: ${detectedLanguage}`);
+    } catch (detectError) {
+      console.error(`[${sessionId}] LANGUAGE DETECTION FAILED:`, detectError);
+      throw detectError;
+    }
 
     // Step 4: Send to Make.com for translation & TTS (async)
-    console.log(`[${sessionId}] Sending to Make.com webhook (async mode)...`);
+    console.log(`[${sessionId}] Preparing to send to Make.com webhook...`);
 
-    // Build callback URL - Make.com will call this when done
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const callbackUrl = `${baseUrl}/api/makecom-callback`;
 
-    await sendToMakeWebhook({
-      sessionId,
-      transcript,
-      detectedLanguage,
-      targetLanguage,
-      voiceId,
-      callbackUrl,
-    });
+    console.log(`[${sessionId}] Callback URL: ${callbackUrl}`);
+    console.log(`[${sessionId}] Target language: ${targetLanguage}`);
+    console.log(`[${sessionId}] Voice ID: ${voiceId}`);
+
+    try {
+      console.log(`[${sessionId}] Calling sendToMakeWebhook NOW...`);
+      const webhookResult = await sendToMakeWebhook({
+        sessionId,
+        transcript,
+        detectedLanguage,
+        targetLanguage,
+        voiceId,
+        callbackUrl,
+      });
+      console.log(`[${sessionId}] WEBHOOK CALL COMPLETE:`, webhookResult);
+    } catch (webhookError) {
+      console.error(`[${sessionId}] WEBHOOK CALL FAILED:`, webhookError);
+      throw webhookError;
+    }
 
     console.log(
-      `[${sessionId}] Webhook triggered. Waiting for callback at ${callbackUrl}`
+      `[${sessionId}] ✅ All steps complete. Waiting for Make.com callback at ${callbackUrl}`
     );
-    // Status remains "processing" until callback receives results
   } catch (error: unknown) {
-    console.error(`[${sessionId}] Processing error:`, error);
-    updateSession(sessionId, {
+    console.error(`[${sessionId}] ❌ FATAL ERROR:`, error);
+    console.error(`[${sessionId}] Error type:`, typeof error);
+    console.error(
+      `[${sessionId}] Error details:`,
+      error instanceof Error ? error.stack : String(error)
+    );
+    await updateSession(sessionId, {
       status: "error",
       error: error instanceof Error ? error.message : "Unknown error occurred",
     });
