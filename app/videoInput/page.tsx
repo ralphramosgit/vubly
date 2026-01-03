@@ -29,7 +29,45 @@ export default function VideoUpload() {
   const [targetLanguage, setTargetLanguage] = useState("es");
   const [voiceId, setVoiceId] = useState("zl7szWVBXnpgrJmAalgz");
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [captionStatus, setCaptionStatus] = useState<string>("");
   const [error, setError] = useState("");
+
+  const handleCheckCaptions = async () => {
+    if (!youtubeLink.trim()) {
+      setError("Please enter a YouTube URL");
+      return;
+    }
+
+    setError("");
+    setCaptionStatus("");
+    setChecking(true);
+
+    try {
+      const response = await fetch("/api/check-captions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ youtubeUrl: youtubeLink }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to check captions");
+      }
+
+      setCaptionStatus(data.message);
+      if (!data.hasCaptions) {
+        setError(
+          "⚠️ This video does NOT have captions. Please try a different video."
+        );
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to check captions");
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const handleStart = async () => {
     if (!youtubeLink.trim()) {
@@ -81,16 +119,44 @@ export default function VideoUpload() {
 
           {/* Input and Options */}
           <div className="w-full max-w-3xl space-y-6">
-            {/* YouTube URL Input */}
-            <div className="relative">
-              <input
-                type="text"
-                value={youtubeLink}
-                onChange={(e) => setYoutubeLink(e.target.value)}
-                placeholder="www.youtube.com/...."
-                className="w-full px-8 py-5 text-lg rounded-2xl bg-white/95 text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-saas-yellow shadow-lg shadow-saas-yellow/20 transition-all duration-200"
-                disabled={loading}
-              />
+            {/* YouTube URL Input with Check Button */}
+            <div className="space-y-3">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={youtubeLink}
+                  onChange={(e) => {
+                    setYoutubeLink(e.target.value);
+                    setCaptionStatus("");
+                  }}
+                  placeholder="www.youtube.com/...."
+                  className="w-full px-8 py-5 text-lg rounded-2xl bg-white/95 text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-saas-yellow shadow-lg shadow-saas-yellow/20 transition-all duration-200"
+                  disabled={loading || checking}
+                />
+              </div>
+
+              {/* Check Captions Button */}
+              <Button
+                onClick={handleCheckCaptions}
+                disabled={loading || checking || !youtubeLink.trim()}
+                variant="outline"
+                className="w-full border-2 border-saas-yellow/50 text-saas-yellow hover:bg-saas-yellow/10 font-medium py-3 rounded-lg transition-all duration-200"
+              >
+                {checking ? "Checking..." : "🔍 Check if Video Has Captions"}
+              </Button>
+
+              {/* Caption Status */}
+              {captionStatus && (
+                <div
+                  className={`px-4 py-3 rounded-lg text-sm ${
+                    captionStatus.includes("✅")
+                      ? "bg-green-500/20 border border-green-500 text-green-300"
+                      : "bg-yellow-500/20 border border-yellow-500 text-yellow-300"
+                  }`}
+                >
+                  {captionStatus}
+                </div>
+              )}
             </div>
 
             {/* Language and Voice Selection */}
