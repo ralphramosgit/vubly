@@ -48,14 +48,21 @@ export function extractVideoId(url: string): string | null {
 
 export async function downloadAudio(videoId: string): Promise<Buffer> {
   const url = `https://www.youtube.com/watch?v=${videoId}`;
-  
+
   console.log(`[Audio] Using cobalt.tools API for ${videoId}...`);
-  
+
   try {
-    return await downloadViaCobalt(videoId, "audio");
+    const buffer = await downloadViaCobalt(videoId, "audio");
+    console.log(`[Audio] Cobalt.tools succeeded!`);
+    return buffer;
   } catch (cobaltError) {
-    console.error("[Audio] Cobalt.tools failed:", cobaltError);
+    console.error(
+      "[Audio] Cobalt.tools failed:",
+      cobaltError instanceof Error ? cobaltError.message : String(cobaltError)
+    );
+    console.error("[Audio] Cobalt.tools full error:", cobaltError);
     // Fallback to yt-dlp as last resort
+    console.log("[Audio] Falling back to yt-dlp...");
     return await downloadAudioViaYtdlp(videoId);
   }
 }
@@ -66,7 +73,7 @@ async function downloadAudioViaYtdlp(videoId: string): Promise<Buffer> {
   const outputPath = path.join(tempDir, `${videoId}_audio.mp3`);
 
   console.log("[Audio] Trying yt-dlp as fallback...");
-  
+
   try {
     await execAsync(
       `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=web;player_skip=configs,js" --no-check-certificates -x --audio-format mp3 --audio-quality 0 -o "${outputPath}" "${url}"`,
@@ -82,7 +89,7 @@ async function downloadAudioViaYtdlp(videoId: string): Promise<Buffer> {
       }
       return audioBuffer;
     }
-    
+
     throw new Error("Audio file not created");
   } catch (error: unknown) {
     // Cleanup
@@ -91,7 +98,7 @@ async function downloadAudioViaYtdlp(videoId: string): Promise<Buffer> {
         fs.unlinkSync(outputPath);
       }
     } catch {}
-    
+
     throw new Error(
       `Failed to download audio: ${error instanceof Error ? error.message : String(error)}`
     );
@@ -103,59 +110,75 @@ async function downloadViaCobalt(
   type: "audio" | "video"
 ): Promise<Buffer> {
   const url = `https://www.youtube.com/watch?v=${videoId}`;
-  
+
   console.log(`[Cobalt] Requesting ${type} download for ${videoId}...`);
-  
+  console.log(`[Cobalt] URL: ${url}`);
+
+  const requestBody = {
+    url: url,
+    vCodec: "h264",
+    vQuality: "720",
+    aFormat: "mp3",
+    filenamePattern: "basic",
+    isAudioOnly: type === "audio",
+  };
+
+  console.log(`[Cobalt] Request body:`, JSON.stringify(requestBody));
+
   const response = await fetch("https://api.cobalt.tools/api/json", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
     },
-    body: JSON.stringify({
-      url: url,
-      vCodec: "h264",
-      vQuality: "720",
-      aFormat: "mp3",
-      filenamePattern: "basic",
-      isAudioOnly: type === "audio",
-    }),
+    body: JSON.stringify(requestBody),
   });
+
+  console.log(`[Cobalt] Response status: ${response.status}`);
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.error(`[Cobalt] HTTP error response:`, errorText);
     throw new Error(`Cobalt API HTTP error: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
-  console.log(`[Cobalt] Response status: ${data.status}`);
-  
+  console.log(`[Cobalt] Response data:`, JSON.stringify(data));
+
   if (data.status === "error" || data.status === "rate-limit") {
-    throw new Error(`Cobalt API error: ${data.text || "Unknown error"}`);
+    throw new Error(`Cobalt API error: ${data.text || JSON.stringify(data)}`);
   }
 
   // Get the download URL
   const fileUrl = data.url;
   if (!fileUrl) {
-    throw new Error(`Cobalt API did not return a download URL: ${JSON.stringify(data)}`);
+    throw new Error(
+      `Cobalt API did not return a download URL. Full response: ${JSON.stringify(data)}`
+    );
   }
-  
+
+  console.log(`[Cobalt] Downloading from: ${fileUrl}`);
+
   const fileResponse = await fetch(fileUrl);
+  console.log(`[Cobalt] File download status: ${fileResponse.status}`);
+
   if (!fileResponse.ok) {
-    throw new Error(`Failed to download from cobalt: ${fileResponse.status} ${fileResponse.statusText}`);
+    throw new Error(
+      `Failed to download from cobalt: ${fileResponse.status} ${fileResponse.statusText}`
+    );
   }
 
   const buffer = Buffer.from(await fileResponse.arrayBuffer());
   console.log(`[Cobalt] Downloaded ${buffer.length} bytes`);
-  
+
   return buffer;
 }
 
 export async function downloadVideo(videoId: string): Promise<Buffer> {
   const url = `https://www.youtube.com/watch?v=${videoId}`;
-  
+
   console.log(`[Video] Using cobalt.tools API for ${videoId}...`);
-  
+
   try {
     return await downloadViaCobalt(videoId, "video");
   } catch (cobaltError) {
@@ -171,7 +194,7 @@ async function downloadVideoViaYtdlp(videoId: string): Promise<Buffer> {
   const outputPath = path.join(tempDir, `${videoId}_video.mp4`);
 
   console.log("[Video] Trying yt-dlp as fallback...");
-  
+
   try {
     await execAsync(
       `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=web;player_skip=configs,js" --no-check-certificates -f "bestvideo[ext=mp4]/best[ext=mp4]" -o "${outputPath}" "${url}"`,
@@ -187,7 +210,7 @@ async function downloadVideoViaYtdlp(videoId: string): Promise<Buffer> {
       }
       return videoBuffer;
     }
-    
+
     throw new Error("Video file not created");
   } catch (error: unknown) {
     // Cleanup
@@ -196,7 +219,7 @@ async function downloadVideoViaYtdlp(videoId: string): Promise<Buffer> {
         fs.unlinkSync(outputPath);
       }
     } catch {}
-    
+
     throw new Error(
       `Failed to download video: ${error instanceof Error ? error.message : String(error)}`
     );
