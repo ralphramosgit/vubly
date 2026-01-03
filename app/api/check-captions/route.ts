@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractVideoId } from "@/lib/youtube";
 import { getYouTubeTranscript } from "@/lib/youtube-transcript";
+import { getYouTubeTranscriptViaInnertube } from "@/lib/youtube-transcript-innertube";
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,13 +22,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Try to fetch captions
-    const transcript = await getYouTubeTranscript(videoId);
+    // Try Method 1: youtube-transcript
+    let transcript = await getYouTubeTranscript(videoId);
+
+    // Try Method 2: youtubei.js
+    if (!transcript) {
+      console.log(
+        `[Check] First method failed, trying innertube for ${videoId}...`
+      );
+      transcript = await getYouTubeTranscriptViaInnertube(videoId);
+    }
 
     if (transcript) {
       return NextResponse.json({
         hasCaptions: true,
         videoId,
+        previewText: transcript.substring(0, 200),
         message: "✅ This video has captions and can be processed",
       });
     } else {

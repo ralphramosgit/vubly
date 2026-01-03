@@ -19,14 +19,29 @@ export async function getYouTubeTranscript(
         `[Transcript] Attempting to fetch ${lang ? `with language: ${lang}` : "with auto-detect"}...`
       );
 
+      const config = lang ? { lang } : {};
+      console.log(`[Transcript] Config:`, JSON.stringify(config));
+
       const transcriptData = await YoutubeTranscript.fetchTranscript(
         videoId,
-        lang ? { lang } : {}
+        config
+      );
+
+      console.log(
+        `[Transcript] Received data with ${transcriptData?.length || 0} segments`
       );
 
       if (!transcriptData || transcriptData.length === 0) {
         console.log(`[Transcript] No data returned for ${lang || "auto"}`);
         continue;
+      }
+
+      // Log first segment to see structure
+      if (transcriptData.length > 0) {
+        console.log(
+          `[Transcript] First segment:`,
+          JSON.stringify(transcriptData[0])
+        );
       }
 
       // Combine all transcript segments into full text
@@ -45,6 +60,10 @@ export async function getYouTubeTranscript(
       console.log(
         `[Transcript] Failed with ${lang || "auto"}:`,
         error instanceof Error ? error.message : String(error)
+      );
+      console.log(
+        `[Transcript] Full error object:`,
+        JSON.stringify(error, null, 2)
       );
       // Continue to next language
     }
