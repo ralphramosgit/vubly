@@ -9,6 +9,7 @@ const VOICE_OPTIONS = [
   { id: "gUABw7pXQjhjt0kNFBTF", name: "Andrew" },
   { id: "tnSpp4vdxKPjI9w0GnoV", name: "Hope" },
   { id: "NNl6r8mD7vthiJatiJt1", name: "Bradford" },
+  { id: "EGuUcoitkhx73AvR1V3C", name: "Peter Griffin" },
 ];
 
 const LANGUAGE_OPTIONS = [
