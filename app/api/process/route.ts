@@ -75,27 +75,39 @@ async function processVideoAndTriggerWebhook(
     console.log(`[${sessionId}] Downloading audio and video...`);
     await updateSession(sessionId, { status: "processing" });
 
-    const downloadPromise = Promise.all([
-      downloadAudio(videoId),
-      downloadVideo(videoId),
-    ]);
+    // Try to download both, but don't fail if video fails
+    let audioBuffer: Buffer;
+    let videoBuffer: Buffer | null = null;
+    
+    try {
+      const [audio, video] = await Promise.allSettled([
+        downloadAudio(videoId),
+        downloadVideo(videoId),
+      ]);
+      
+      if (audio.status === "fulfilled") {
+        audioBuffer = audio.value;
+        console.log(`[${sessionId}] Audio downloaded: ${audioBuffer.length} bytes`);
+      } else {
+        throw new Error(`Audio download failed: ${audio.reason}`);
+      }
+      
+      if (video.status === "fulfilled") {
+        videoBuffer = video.value;
+        console.log(`[${sessionId}] Video downloaded: ${videoBuffer.length} bytes`);
+      } else {
+        console.warn(`[${sessionId}] Video download failed (non-fatal): ${video.reason}`);
+        console.log(`[${sessionId}] Continuing without video...`);
+      }
+    } catch (error) {
+      console.error(`[${sessionId}] Download error:`, error);
+      throw error;
+    }
 
-    // Add 60-second timeout for downloads
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(
-        () => reject(new Error("Download timeout after 60 seconds")),
-        60000
-      )
-    );
-
-    const [audioBuffer, videoBuffer] = await Promise.race([
-      downloadPromise,
-      timeoutPromise,
-    ]);
-
-    await updateSession(sessionId, { originalAudio: audioBuffer, videoBuffer });
-    console.log(`[${sessionId}] Audio downloaded: ${audioBuffer.length} bytes`);
-    console.log(`[${sessionId}] Video downloaded: ${videoBuffer.length} bytes`);
+    await updateSession(sessionId, { 
+      originalAudio: audioBuffer, 
+      videoBuffer: videoBuffer || undefined 
+    });
 
     // Step 2: Try to get transcript from YouTube captions first
     console.log(`[${sessionId}] Checking for YouTube captions...`);
