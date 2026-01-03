@@ -146,7 +146,7 @@ export default function VideoUpload() {
       });
 
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.error || "Processing failed");
       }

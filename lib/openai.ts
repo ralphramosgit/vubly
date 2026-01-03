@@ -8,7 +8,8 @@ const openai = new OpenAI({
 
 export async function transcribeAudio(audioBuffer: Buffer) {
   // Save buffer to temp file (Whisper needs a file)
-  const tempDir = path.join(process.cwd(), "tmp");
+  // Use /tmp for Vercel serverless (read-only filesystem except /tmp)
+  const tempDir = process.env.VERCEL ? "/tmp" : path.join(process.cwd(), "tmp");
   if (!fs.existsSync(tempDir)) {
     fs.mkdirSync(tempDir, { recursive: true });
   }
