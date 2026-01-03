@@ -53,12 +53,12 @@ export async function downloadAudio(videoId: string): Promise<Buffer> {
 
   // Try multiple strategies in order
   const strategies = [
-    // Strategy 1: mediaconnect client (newest working method as of 2024/2025)
-    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=mediaconnect" --no-check-certificates -x --audio-format mp3 --audio-quality 0 -o "${outputPath}" "${url}"`,
-    // Strategy 2: tv_embedded client
-    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=tv_embedded" --no-check-certificates -x --audio-format mp3 --audio-quality 0 -o "${outputPath}" "${url}"`,
-    // Strategy 3: web client with spoofed signature
-    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=web" --add-header "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" --no-check-certificates -x --audio-format mp3 --audio-quality 0 -o "${outputPath}" "${url}"`,
+    // Strategy 1: web client with service worker bypass (2025 method)
+    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=web;player_skip=configs,js" --no-check-certificates -x --audio-format mp3 --audio-quality 0 -o "${outputPath}" "${url}"`,
+    // Strategy 2: mweb client (mobile web)
+    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=mweb" --no-check-certificates -x --audio-format mp3 --audio-quality 0 -o "${outputPath}" "${url}"`,
+    // Strategy 3: android with testsuite
+    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=android_testsuite" --no-check-certificates -x --audio-format mp3 --audio-quality 0 -o "${outputPath}" "${url}"`,
   ];
 
   let lastError: Error | null = null;
@@ -111,12 +111,12 @@ export async function downloadVideo(videoId: string): Promise<Buffer> {
 
   // Try multiple strategies in order
   const strategies = [
-    // Strategy 1: mediaconnect client (newest working method)
-    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=mediaconnect" --no-check-certificates -f "bestvideo[ext=mp4]/best[ext=mp4]" -o "${outputPath}" "${url}"`,
-    // Strategy 2: tv_embedded client
-    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=tv_embedded" --no-check-certificates -f "bestvideo[ext=mp4]/best[ext=mp4]" -o "${outputPath}" "${url}"`,
-    // Strategy 3: web client
-    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=web" --add-header "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" --no-check-certificates -f "bestvideo[ext=mp4]/best[ext=mp4]" -o "${outputPath}" "${url}"`,
+    // Strategy 1: web client with service worker bypass
+    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=web;player_skip=configs,js" --no-check-certificates -f "bestvideo[ext=mp4]/best[ext=mp4]" -o "${outputPath}" "${url}"`,
+    // Strategy 2: mweb client
+    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=mweb" --no-check-certificates -f "bestvideo[ext=mp4]/best[ext=mp4]" -o "${outputPath}" "${url}"`,
+    // Strategy 3: android testsuite
+    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=android_testsuite" --no-check-certificates -f "bestvideo[ext=mp4]/best[ext=mp4]" -o "${outputPath}" "${url}"`,
   ];
 
   let lastError: Error | null = null;
