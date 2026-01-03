@@ -51,43 +51,54 @@ export async function downloadAudio(videoId: string): Promise<Buffer> {
   const tempDir = os.tmpdir();
   const outputPath = path.join(tempDir, `${videoId}_audio.mp3`);
 
-  try {
-    // Use yt-dlp with OAuth and improved bypass options
-    await execAsync(
-      `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=ios,mweb;player_skip=webpage" --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15" --no-check-certificates --extractor-retries 5 --add-header "Accept-Language:en-US,en" -x --audio-format mp3 --audio-quality 0 -o "${outputPath}" "${url}"`,
-      { maxBuffer: 50 * 1024 * 1024, timeout: 120000 }
-    );
+  // Try multiple strategies in order
+  const strategies = [
+    // Strategy 1: tv_embedded client (most reliable)
+    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=tv_embedded" --no-check-certificates --extractor-retries 5 -x --audio-format mp3 --audio-quality 0 -o "${outputPath}" "${url}"`,
+    // Strategy 2: iOS client
+    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=ios;player_skip=webpage" --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15" --no-check-certificates --extractor-retries 5 -x --audio-format mp3 --audio-quality 0 -o "${outputPath}" "${url}"`,
+    // Strategy 3: Android with OAuth
+    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=android_creator" --no-check-certificates --extractor-retries 5 -x --audio-format mp3 --audio-quality 0 -o "${outputPath}" "${url}"`,
+  ];
 
-    // Check if file exists
-    if (!fs.existsSync(outputPath)) {
-      throw new Error(`Audio file not created at ${outputPath}`);
-    }
+  let lastError: Error | null = null;
 
-    const audioBuffer = fs.readFileSync(outputPath);
-
-    // Clean up temp file
+  for (let i = 0; i < strategies.length; i++) {
     try {
-      fs.unlinkSync(outputPath);
-    } catch {
-      console.warn(`Failed to cleanup temp audio file: ${outputPath}`);
-    }
+      console.log(`[Audio] Trying strategy ${i + 1}/${strategies.length}...`);
+      await execAsync(strategies[i], {
+        maxBuffer: 50 * 1024 * 1024,
+        timeout: 120000,
+      });
 
-    return audioBuffer;
-  } catch (error: unknown) {
-    // Ensure cleanup even on error
-    try {
+      // Check if file exists
       if (fs.existsSync(outputPath)) {
-        fs.unlinkSync(outputPath);
+        const audioBuffer = fs.readFileSync(outputPath);
+        try {
+          fs.unlinkSync(outputPath);
+        } catch {
+          console.warn(`Failed to cleanup temp audio file: ${outputPath}`);
+        }
+        console.log(`[Audio] Success with strategy ${i + 1}`);
+        return audioBuffer;
       }
-    } catch {
-      console.warn(`Failed to cleanup temp audio file on error: ${outputPath}`);
+    } catch (error: unknown) {
+      lastError = error as Error;
+      console.warn(`[Audio] Strategy ${i + 1} failed:`, error instanceof Error ? error.message : String(error));
+      // Clean up and try next strategy
+      try {
+        if (fs.existsSync(outputPath)) {
+          fs.unlinkSync(outputPath);
+        }
+      } catch {}
     }
-
-    console.error("yt-dlp audio download error:", error);
-    throw new Error(
-      `Failed to download audio: ${error instanceof Error ? error.message : String(error)}`
-    );
   }
+
+  // All strategies failed
+  console.error("yt-dlp audio download error - all strategies failed");
+  throw new Error(
+    `Failed to download audio after trying all strategies: ${lastError?.message || "Unknown error"}`
+  );
 }
 
 export async function downloadVideo(videoId: string): Promise<Buffer> {
@@ -120,12 +131,23 @@ export async function downloadVideo(videoId: string): Promise<Buffer> {
   } catch (error: unknown) {
     // Ensure cleanup even on error
     try {
-      if (fs.existsSync(outputPath)) {
-        fs.unlinkSync(outputPath);
-      }
-    } catch {
-      console.warn(`Failed to cleanup temp video file on error: ${outputPath}`);
+  // Try multiple strategies in order
+  const strategies = [
+    // Strategy 1: tv_embedded client (most reliable)
+    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=tv_embedded" --no-check-certificates --extractor-retries 5 -f "bestvideo[ext=mp4]/best[ext=mp4]" -o "${outputPath}" "${url}"`,
+    // Strategy 2: iOS client
+    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=ios;player_skip=webpage" --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15" --no-check-certificates --extractor-retries 5 -f "bestvideo[ext=mp4]/best[ext=mp4]" -o "${outputPath}" "${url}"`,
+    // Strategy 3: Android creator
+  // All strategies failed
+  console.error("yt-dlp video download error - all strategies failed");
+  throw new Error(
+    `Failed to download video after trying all strategies: ${lastError?.message || "Unknown error"}`
+  );     if (fs.existsSync(outputPath)) {
+          fs.unlinkSync(outputPath);
+        }
+      } catch {}
     }
+  }
 
     console.error("yt-dlp video download error:", error);
     throw new Error(
