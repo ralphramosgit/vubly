@@ -22,6 +22,7 @@ const LANGUAGE_OPTIONS = [
   { code: "ja", name: "Japanese" },
   { code: "ko", name: "Korean" },
   { code: "zh", name: "Chinese" },
+  { code: "fil", name: "Filipino" },
 ];
 
 // Extract video ID from YouTube URL
