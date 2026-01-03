@@ -48,63 +48,52 @@ export function extractVideoId(url: string): string | null {
 
 export async function downloadAudio(videoId: string): Promise<Buffer> {
   const url = `https://www.youtube.com/watch?v=${videoId}`;
-  const tempDir = os.tmpdir();
-  const outputPath = path.join(tempDir, `${videoId}_audio.mp3`);
-
-  // Try multiple strategies in order
-  const strategies = [
-    // Strategy 1: web client with service worker bypass (2025 method)
-    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=web;player_skip=configs,js" --no-check-certificates -x --audio-format mp3 --audio-quality 0 -o "${outputPath}" "${url}"`,
-    // Strategy 2: mweb client (mobile web)
-    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=mweb" --no-check-certificates -x --audio-format mp3 --audio-quality 0 -o "${outputPath}" "${url}"`,
-    // Strategy 3: android with testsuite
-    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=android_testsuite" --no-check-certificates -x --audio-format mp3 --audio-quality 0 -o "${outputPath}" "${url}"`,
-  ];
-
-  let lastError: Error | null = null;
-
-  for (let i = 0; i < strategies.length; i++) {
-    try {
-      console.log(`[Audio] Trying strategy ${i + 1}/${strategies.length}...`);
-      await execAsync(strategies[i], {
-        maxBuffer: 50 * 1024 * 1024,
-        timeout: 120000,
-      });
-
-      // Check if file exists
-      if (fs.existsSync(outputPath)) {
-        const audioBuffer = fs.readFileSync(outputPath);
-        try {
-          fs.unlinkSync(outputPath);
-        } catch {
-          console.warn(`Failed to cleanup temp audio file: ${outputPath}`);
-        }
-        console.log(`[Audio] Success with strategy ${i + 1}`);
-        return audioBuffer;
-      }
-    } catch (error: unknown) {
-      lastError = error as Error;
-      console.warn(
-        `[Audio] Strategy ${i + 1} failed:`,
-        error instanceof Error ? error.message : String(error)
-      );
-      // Clean up and try next strategy
-      try {
-        if (fs.existsSync(outputPath)) {
-          fs.unlinkSync(outputPath);
-        }
-      } catch {}
-    }
-  }
-
-  // All strategies failed, try cobalt.tools as last resort
-  console.log("[Audio] All yt-dlp strategies failed, trying cobalt.tools API...");
+  
+  console.log(`[Audio] Using cobalt.tools API for ${videoId}...`);
+  
   try {
     return await downloadViaCobalt(videoId, "audio");
   } catch (cobaltError) {
-    console.error("[Audio] Cobalt.tools also failed:", cobaltError);
+    console.error("[Audio] Cobalt.tools failed:", cobaltError);
+    // Fallback to yt-dlp as last resort
+    return await downloadAudioViaYtdlp(videoId);
+  }
+}
+
+async function downloadAudioViaYtdlp(videoId: string): Promise<Buffer> {
+  const url = `https://www.youtube.com/watch?v=${videoId}`;
+  const tempDir = os.tmpdir();
+  const outputPath = path.join(tempDir, `${videoId}_audio.mp3`);
+
+  console.log("[Audio] Trying yt-dlp as fallback...");
+  
+  try {
+    await execAsync(
+      `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=web;player_skip=configs,js" --no-check-certificates -x --audio-format mp3 --audio-quality 0 -o "${outputPath}" "${url}"`,
+      { maxBuffer: 50 * 1024 * 1024, timeout: 120000 }
+    );
+
+    if (fs.existsSync(outputPath)) {
+      const audioBuffer = fs.readFileSync(outputPath);
+      try {
+        fs.unlinkSync(outputPath);
+      } catch {
+        console.warn(`Failed to cleanup temp audio file: ${outputPath}`);
+      }
+      return audioBuffer;
+    }
+    
+    throw new Error("Audio file not created");
+  } catch (error: unknown) {
+    // Cleanup
+    try {
+      if (fs.existsSync(outputPath)) {
+        fs.unlinkSync(outputPath);
+      }
+    } catch {}
+    
     throw new Error(
-      `Failed to download audio after all methods: ${lastError?.message || "Unknown error"}`
+      `Failed to download audio: ${error instanceof Error ? error.message : String(error)}`
     );
   }
 }
@@ -125,24 +114,35 @@ async function downloadViaCobalt(
     },
     body: JSON.stringify({
       url: url,
-      filenameStyle: "basic",
-      downloadMode: type === "audio" ? "audio" : "auto",
+      vCodec: "h264",
+      vQuality: "720",
+      aFormat: "mp3",
+      filenamePattern: "basic",
+      isAudioOnly: type === "audio",
     }),
   });
 
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Cobalt API HTTP error: ${response.status} - ${errorText}`);
+  }
+
   const data = await response.json();
+  console.log(`[Cobalt] Response status: ${data.status}`);
   
-  if (data.status !== "stream" && data.status !== "redirect") {
+  if (data.status === "error" || data.status === "rate-limit") {
     throw new Error(`Cobalt API error: ${data.text || "Unknown error"}`);
   }
 
-  // Download the file from cobalt's URL
+  // Get the download URL
   const fileUrl = data.url;
-  console.log(`[Cobalt] Downloading from: ${fileUrl}`);
+  if (!fileUrl) {
+    throw new Error(`Cobalt API did not return a download URL: ${JSON.stringify(data)}`);
+  }
   
   const fileResponse = await fetch(fileUrl);
   if (!fileResponse.ok) {
-    throw new Error(`Failed to download from cobalt: ${fileResponse.statusText}`);
+    throw new Error(`Failed to download from cobalt: ${fileResponse.status} ${fileResponse.statusText}`);
   }
 
   const buffer = Buffer.from(await fileResponse.arrayBuffer());
@@ -153,63 +153,52 @@ async function downloadViaCobalt(
 
 export async function downloadVideo(videoId: string): Promise<Buffer> {
   const url = `https://www.youtube.com/watch?v=${videoId}`;
-  const tempDir = os.tmpdir();
-  const outputPath = path.join(tempDir, `${videoId}_video.mp4`);
-
-  // Try multiple strategies in order
-  const strategies = [
-    // Strategy 1: web client with service worker bypass
-    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=web;player_skip=configs,js" --no-check-certificates -f "bestvideo[ext=mp4]/best[ext=mp4]" -o "${outputPath}" "${url}"`,
-    // Strategy 2: mweb client
-    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=mweb" --no-check-certificates -f "bestvideo[ext=mp4]/best[ext=mp4]" -o "${outputPath}" "${url}"`,
-    // Strategy 3: android testsuite
-    `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=android_testsuite" --no-check-certificates -f "bestvideo[ext=mp4]/best[ext=mp4]" -o "${outputPath}" "${url}"`,
-  ];
-
-  let lastError: Error | null = null;
-
-  for (let i = 0; i < strategies.length; i++) {
-    try {
-      console.log(`[Video] Trying strategy ${i + 1}/${strategies.length}...`);
-      await execAsync(strategies[i], {
-        maxBuffer: 100 * 1024 * 1024,
-        timeout: 120000,
-      });
-
-      // Check if file exists
-      if (fs.existsSync(outputPath)) {
-        const videoBuffer = fs.readFileSync(outputPath);
-        try {
-          fs.unlinkSync(outputPath);
-        } catch {
-          console.warn(`Failed to cleanup temp video file: ${outputPath}`);
-        }
-        console.log(`[Video] Success with strategy ${i + 1}`);
-        return videoBuffer;
-      }
-    } catch (error: unknown) {
-      lastError = error as Error;
-      console.warn(
-        `[Video] Strategy ${i + 1} failed:`,
-        error instanceof Error ? error.message : String(error)
-      );
-      // Clean up and try next strategy
-      try {
-        if (fs.existsSync(outputPath)) {
-          fs.unlinkSync(outputPath);
-        }
-      } catch {}
-    }
-  }
-
-  // All strategies failed, try cobalt.tools as last resort
-  console.log("[Video] All yt-dlp strategies failed, trying cobalt.tools API...");
+  
+  console.log(`[Video] Using cobalt.tools API for ${videoId}...`);
+  
   try {
     return await downloadViaCobalt(videoId, "video");
   } catch (cobaltError) {
-    console.error("[Video] Cobalt.tools also failed:", cobaltError);
+    console.error("[Video] Cobalt.tools failed:", cobaltError);
+    // Fallback to yt-dlp
+    return await downloadVideoViaYtdlp(videoId);
+  }
+}
+
+async function downloadVideoViaYtdlp(videoId: string): Promise<Buffer> {
+  const url = `https://www.youtube.com/watch?v=${videoId}`;
+  const tempDir = os.tmpdir();
+  const outputPath = path.join(tempDir, `${videoId}_video.mp4`);
+
+  console.log("[Video] Trying yt-dlp as fallback...");
+  
+  try {
+    await execAsync(
+      `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=web;player_skip=configs,js" --no-check-certificates -f "bestvideo[ext=mp4]/best[ext=mp4]" -o "${outputPath}" "${url}"`,
+      { maxBuffer: 100 * 1024 * 1024, timeout: 120000 }
+    );
+
+    if (fs.existsSync(outputPath)) {
+      const videoBuffer = fs.readFileSync(outputPath);
+      try {
+        fs.unlinkSync(outputPath);
+      } catch {
+        console.warn(`Failed to cleanup temp video file: ${outputPath}`);
+      }
+      return videoBuffer;
+    }
+    
+    throw new Error("Video file not created");
+  } catch (error: unknown) {
+    // Cleanup
+    try {
+      if (fs.existsSync(outputPath)) {
+        fs.unlinkSync(outputPath);
+      }
+    } catch {}
+    
     throw new Error(
-      `Failed to download video after all methods: ${lastError?.message || "Unknown error"}`
+      `Failed to download video: ${error instanceof Error ? error.message : String(error)}`
     );
   }
 }
