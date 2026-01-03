@@ -336,11 +336,34 @@ export async function downloadAudioViaRapidAPI(
     console.log(`[RapidAPI] Response status: ${data.status}`);
 
     if (data.status === "ok" && data.link) {
-      console.log(`[RapidAPI] Got MP3 link, downloading...`);
+      console.log(`[RapidAPI] Got MP3 link: ${data.link.substring(0, 50)}...`);
 
-      // Download the actual MP3 file
-      const mp3Response = await fetch(data.link);
+      // Download the actual MP3 file with browser-like headers (required for whitelist)
+      const mp3Response = await fetch(data.link, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'audio/mpeg,audio/*;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Referer': 'https://youtube-mp36.p.rapidapi.com/',
+        },
+      });
+      
       if (!mp3Response.ok) {
+        console.log(`[RapidAPI] MP3 download failed with ${mp3Response.status}, trying redirect...`);
+        // Some services return redirects, try following manually
+        const location = mp3Response.headers.get('location');
+        if (location) {
+          const redirectResponse = await fetch(location, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+          });
+          if (redirectResponse.ok) {
+            const arrayBuffer = await redirectResponse.arrayBuffer();
+            console.log(`[RapidAPI] ✅ Downloaded ${arrayBuffer.byteLength} bytes (via redirect)`);
+            return Buffer.from(arrayBuffer);
+          }
+        }
         throw new Error(`Failed to download MP3: ${mp3Response.status}`);
       }
 
