@@ -32,13 +32,39 @@ export default function VideoPlayback({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [videoReady, setVideoReady] = useState(false);
+  const [videoFailed, setVideoFailed] = useState(false);
+  const [audioReady, setAudioReady] = useState(false);
 
-  // Sync video and audio playback
+  // Sync video and audio playback (or audio-only if video failed)
   useEffect(() => {
     const video = videoRef.current;
     const audio = audioRef.current;
-    if (!video || !audio) return;
+    if (!audio) return;
 
+    // If video failed or not available, use audio-only mode
+    if (videoFailed || !video) {
+      const handleAudioPlay = () => setIsPlaying(true);
+      const handleAudioPause = () => setIsPlaying(false);
+      const handleAudioTimeUpdate = () => setCurrentTime(audio.currentTime);
+      const handleAudioLoadedMetadata = () => {
+        setDuration(audio.duration);
+        setAudioReady(true);
+      };
+
+      audio.addEventListener("play", handleAudioPlay);
+      audio.addEventListener("pause", handleAudioPause);
+      audio.addEventListener("timeupdate", handleAudioTimeUpdate);
+      audio.addEventListener("loadedmetadata", handleAudioLoadedMetadata);
+
+      return () => {
+        audio.removeEventListener("play", handleAudioPlay);
+        audio.removeEventListener("pause", handleAudioPause);
+        audio.removeEventListener("timeupdate", handleAudioTimeUpdate);
+        audio.removeEventListener("loadedmetadata", handleAudioLoadedMetadata);
+      };
+    }
+
+    // Normal video+audio sync mode
     const handleVideoPlay = () => {
       audio.currentTime = video.currentTime;
       audio.play().catch(console.error);
@@ -80,20 +106,22 @@ export default function VideoPlayback({
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("loadedmetadata", handleLoadedMetadata);
     };
-  }, []);
+  }, [videoFailed]);
 
   // Handle audio mode change
   useEffect(() => {
     const video = videoRef.current;
     const audio = audioRef.current;
-    if (!video || !audio) return;
+    if (!audio) return;
 
-    // Sync new audio with current video position
-    audio.currentTime = video.currentTime;
+    // Sync new audio with current video/audio position
+    if (video && !videoFailed) {
+      audio.currentTime = video.currentTime;
+    }
     if (isPlaying) {
       audio.play().catch(console.error);
     }
-  }, [audioMode, isPlaying]);
+  }, [audioMode, isPlaying, videoFailed]);
 
   const formatTime = (time: number) => {
     const mins = Math.floor(time / 60);
@@ -103,13 +131,28 @@ export default function VideoPlayback({
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const time = parseFloat(e.target.value);
-    if (videoRef.current && audioRef.current) {
-      videoRef.current.currentTime = time;
+    if (audioRef.current) {
       audioRef.current.currentTime = time;
+    }
+    if (videoRef.current && !videoFailed) {
+      videoRef.current.currentTime = time;
     }
   };
 
   const togglePlayPause = () => {
+    // If video failed, use audio-only playback
+    if (videoFailed || !videoRef.current) {
+      if (audioRef.current) {
+        if (isPlaying) {
+          audioRef.current.pause();
+        } else {
+          audioRef.current.play().catch(console.error);
+        }
+      }
+      return;
+    }
+    
+    // Normal video+audio playback
     if (videoRef.current) {
       if (isPlaying) {
         videoRef.current.pause();
@@ -125,24 +168,55 @@ export default function VideoPlayback({
       <div className="aspect-video bg-black relative">
         {status === "completed" ? (
           <>
-            <video
-              ref={videoRef}
-              className="w-full h-full"
-              poster={videoInfo.thumbnail}
-              playsInline
-              onClick={togglePlayPause}
-            >
-              <source src={`/api/video/${sessionId}`} type="video/mp4" />
-              Your browser does not support the video tag.
-            </video>
-            {/* Hidden audio element for custom audio track */}
+            {/* Show video if available, otherwise show thumbnail with audio controls */}
+            {!videoFailed ? (
+              <video
+                ref={videoRef}
+                className="w-full h-full"
+                poster={videoInfo.thumbnail}
+                playsInline
+                onClick={togglePlayPause}
+                onError={() => {
+                  console.log("Video failed to load, switching to audio-only mode");
+                  setVideoFailed(true);
+                }}
+              >
+                <source src={`/api/video/${sessionId}`} type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+            ) : (
+              // Audio-only mode with thumbnail
+              <div 
+                className="w-full h-full relative cursor-pointer"
+                onClick={togglePlayPause}
+              >
+                <img
+                  src={videoInfo.thumbnail}
+                  alt={videoInfo.title}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                  <span className="text-white text-sm bg-black/50 px-3 py-1 rounded">
+                    🎵 Audio Only (Video unavailable)
+                  </span>
+                </div>
+              </div>
+            )}
+            {/* Audio element for playback */}
             <audio
               ref={audioRef}
               src={`/api/audio/${sessionId}/${audioMode}`}
               key={audioMode}
+              onLoadedMetadata={() => {
+                // If video failed to load but audio loaded, use audio duration
+                if (videoFailed && audioRef.current) {
+                  setDuration(audioRef.current.duration);
+                  setAudioReady(true);
+                }
+              }}
             />
-            {/* Play overlay */}
-            {!isPlaying && videoReady && (
+            {/* Play overlay - show even if video failed but audio is ready */}
+            {!isPlaying && (videoReady || audioReady || hasTranslatedAudio) && (
               <button
                 onClick={togglePlayPause}
                 className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors"
@@ -188,7 +262,7 @@ export default function VideoPlayback({
         </div>
 
         {/* Video Progress Bar */}
-        {status === "completed" && videoReady && (
+        {status === "completed" && (videoReady || audioReady) && (
           <div className="space-y-2">
             <input
               type="range"
