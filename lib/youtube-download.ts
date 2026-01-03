@@ -6,6 +6,135 @@
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
 
 /**
+ * Download via ssyoutube (most reliable free option)
+ */
+export async function downloadAudioViaSSYoutube(videoId: string): Promise<Buffer> {
+  console.log(`[SSYoutube] Downloading audio for ${videoId}...`);
+  
+  const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  
+  // Step 1: Get download page
+  const pageResponse = await fetch(`https://ssyoutube.com/api/convert`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Origin': 'https://ssyoutube.com',
+      'Referer': 'https://ssyoutube.com/',
+    },
+    body: `url=${encodeURIComponent(youtubeUrl)}`,
+  });
+
+  if (!pageResponse.ok) {
+    throw new Error(`SSYoutube failed: ${pageResponse.status}`);
+  }
+
+  const data = await pageResponse.json();
+  
+  // Find MP3/audio link
+  const audioUrl = data.url || data.audio?.url || data.links?.audio?.[0]?.url;
+  
+  if (!audioUrl) {
+    throw new Error('SSYoutube: No audio URL in response');
+  }
+
+  console.log(`[SSYoutube] Got audio URL, downloading...`);
+  
+  const audioResponse = await fetch(audioUrl, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    },
+  });
+
+  if (!audioResponse.ok) {
+    throw new Error(`SSYoutube download failed: ${audioResponse.status}`);
+  }
+
+  const arrayBuffer = await audioResponse.arrayBuffer();
+  console.log(`[SSYoutube] ✅ Downloaded ${arrayBuffer.byteLength} bytes`);
+  return Buffer.from(arrayBuffer);
+}
+
+/**
+ * Download via 9convert (popular, usually works)
+ */
+export async function downloadAudioVia9Convert(videoId: string): Promise<Buffer> {
+  console.log(`[9Convert] Downloading audio for ${videoId}...`);
+  
+  const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  
+  // Step 1: Analyze
+  const analyzeResponse = await fetch('https://9convert.com/api/ajaxSearch/index', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Origin': 'https://9convert.com',
+      'Referer': 'https://9convert.com/',
+    },
+    body: `query=${encodeURIComponent(youtubeUrl)}&vt=mp3`,
+  });
+
+  if (!analyzeResponse.ok) {
+    throw new Error(`9Convert analyze failed: ${analyzeResponse.status}`);
+  }
+
+  const analyzeData = await analyzeResponse.json();
+  
+  if (analyzeData.status !== 'ok') {
+    throw new Error(`9Convert error: ${analyzeData.mess || 'Analysis failed'}`);
+  }
+
+  // Parse the HTML response to find the conversion key
+  const html = analyzeData.result || '';
+  const keyMatch = html.match(/k__id\s*=\s*["']([^"']+)["']/);
+  
+  if (!keyMatch) {
+    // Try to find direct download link
+    const linkMatch = html.match(/href=["'](https:\/\/[^"']+\.mp3[^"']*)["']/);
+    if (linkMatch) {
+      const audioResponse = await fetch(linkMatch[1]);
+      if (audioResponse.ok) {
+        const arrayBuffer = await audioResponse.arrayBuffer();
+        console.log(`[9Convert] ✅ Downloaded ${arrayBuffer.byteLength} bytes`);
+        return Buffer.from(arrayBuffer);
+      }
+    }
+    throw new Error('9Convert: No conversion key found');
+  }
+
+  // Step 2: Convert
+  const convertResponse = await fetch('https://9convert.com/api/ajaxConvert/convert', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Origin': 'https://9convert.com',
+    },
+    body: `vid=${videoId}&k=${encodeURIComponent(keyMatch[1])}`,
+  });
+
+  if (!convertResponse.ok) {
+    throw new Error(`9Convert convert failed: ${convertResponse.status}`);
+  }
+
+  const convertData = await convertResponse.json();
+  
+  if (convertData.status !== 'ok' || !convertData.dlink) {
+    throw new Error(`9Convert: ${convertData.mess || 'No download link'}`);
+  }
+
+  const audioResponse = await fetch(convertData.dlink);
+  if (!audioResponse.ok) {
+    throw new Error(`9Convert download failed: ${audioResponse.status}`);
+  }
+
+  const arrayBuffer = await audioResponse.arrayBuffer();
+  console.log(`[9Convert] ✅ Downloaded ${arrayBuffer.byteLength} bytes`);
+  return Buffer.from(arrayBuffer);
+}
+
+/**
  * Download via SaveTube API (free, no key required)
  */
 export async function downloadAudioViaSaveTube(videoId: string): Promise<Buffer> {
@@ -331,13 +460,15 @@ export async function downloadAudioViaY2mate(videoId: string): Promise<Buffer> {
  */
 export async function downloadYouTubeAudio(videoId: string): Promise<Buffer> {
   const methods: Array<{ name: string; fn: () => Promise<Buffer> }> = [
+    { name: "9Convert", fn: () => downloadAudioVia9Convert(videoId) },
+    { name: "SSYoutube", fn: () => downloadAudioViaSSYoutube(videoId) },
     { name: "SaveTube", fn: () => downloadAudioViaSaveTube(videoId) },
     { name: "LoaderTo", fn: () => downloadAudioViaLoaderTo(videoId) },
     { name: "YTMP3", fn: () => downloadAudioViaYTMP3(videoId) },
     { name: "Y2mate", fn: () => downloadAudioViaY2mate(videoId) },
   ];
 
-  // Add RapidAPI if key is available
+  // Add RapidAPI if key is available (most reliable, put first)
   if (RAPIDAPI_KEY) {
     methods.unshift({ name: "RapidAPI", fn: () => downloadAudioViaRapidAPI(videoId) });
   }
