@@ -3,6 +3,7 @@ import { promisify } from "util";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { YoutubeTranscript } from "youtube-transcript";
 
 const execAsync = promisify(exec);
 

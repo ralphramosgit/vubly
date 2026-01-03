@@ -5,6 +5,7 @@ import {
   downloadVideo,
   getVideoInfo,
 } from "@/lib/youtube";
+import { getYouTubeTranscript } from "@/lib/youtube-transcript";
 import { transcribeAudio, detectLanguage } from "@/lib/openai";
 import { sendToMakeWebhook } from "@/lib/makecom";
 import { createSession, updateSession } from "@/lib/session";
@@ -96,19 +97,30 @@ async function processVideoAndTriggerWebhook(
     console.log(`[${sessionId}] Audio downloaded: ${audioBuffer.length} bytes`);
     console.log(`[${sessionId}] Video downloaded: ${videoBuffer.length} bytes`);
 
-    // Step 2: Transcribe
-    console.log(`[${sessionId}] Starting transcription...`);
+    // Step 2: Try to get transcript from YouTube captions first
+    console.log(`[${sessionId}] Checking for YouTube captions...`);
     let transcript = "";
-    try {
-      const transcription = await transcribeAudio(audioBuffer);
-      transcript = transcription.text;
+    
+    const youtubeTranscript = await getYouTubeTranscript(videoId);
+    
+    if (youtubeTranscript) {
+      console.log(`[${sessionId}] Using YouTube captions as transcript`);
+      transcript = youtubeTranscript;
       await updateSession(sessionId, { transcript });
-      console.log(
-        `[${sessionId}] Transcription complete: ${transcript.substring(0, 100)}...`
-      );
-    } catch (transcribeError) {
-      console.error(`[${sessionId}] TRANSCRIPTION FAILED:`, transcribeError);
-      throw transcribeError;
+    } else {
+      // No captions available, transcribe audio
+      console.log(`[${sessionId}] No captions found, transcribing audio...`);
+      try {
+        const transcription = await transcribeAudio(audioBuffer);
+        transcript = transcription.text;
+        await updateSession(sessionId, { transcript });
+        console.log(
+          `[${sessionId}] Transcription complete: ${transcript.substring(0, 100)}...`
+        );
+      } catch (transcribeError) {
+        console.error(`[${sessionId}] TRANSCRIPTION FAILED:`, transcribeError);
+        throw transcribeError;
+      }
     }
 
     // Step 3: Detect language
