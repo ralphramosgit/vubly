@@ -97,11 +97,58 @@ export async function downloadAudio(videoId: string): Promise<Buffer> {
     }
   }
 
-  // All strategies failed
-  console.error("yt-dlp audio download error - all strategies failed");
-  throw new Error(
-    `Failed to download audio after trying all strategies: ${lastError?.message || "Unknown error"}`
-  );
+  // All strategies failed, try cobalt.tools as last resort
+  console.log("[Audio] All yt-dlp strategies failed, trying cobalt.tools API...");
+  try {
+    return await downloadViaCobalt(videoId, "audio");
+  } catch (cobaltError) {
+    console.error("[Audio] Cobalt.tools also failed:", cobaltError);
+    throw new Error(
+      `Failed to download audio after all methods: ${lastError?.message || "Unknown error"}`
+    );
+  }
+}
+
+async function downloadViaCobalt(
+  videoId: string,
+  type: "audio" | "video"
+): Promise<Buffer> {
+  const url = `https://www.youtube.com/watch?v=${videoId}`;
+  
+  console.log(`[Cobalt] Requesting ${type} download for ${videoId}...`);
+  
+  const response = await fetch("https://api.cobalt.tools/api/json", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      url: url,
+      filenameStyle: "basic",
+      downloadMode: type === "audio" ? "audio" : "auto",
+    }),
+  });
+
+  const data = await response.json();
+  
+  if (data.status !== "stream" && data.status !== "redirect") {
+    throw new Error(`Cobalt API error: ${data.text || "Unknown error"}`);
+  }
+
+  // Download the file from cobalt's URL
+  const fileUrl = data.url;
+  console.log(`[Cobalt] Downloading from: ${fileUrl}`);
+  
+  const fileResponse = await fetch(fileUrl);
+  if (!fileResponse.ok) {
+    throw new Error(`Failed to download from cobalt: ${fileResponse.statusText}`);
+  }
+
+  const buffer = Buffer.from(await fileResponse.arrayBuffer());
+  console.log(`[Cobalt] Downloaded ${buffer.length} bytes`);
+  
+  return buffer;
 }
 
 export async function downloadVideo(videoId: string): Promise<Buffer> {
@@ -155,11 +202,16 @@ export async function downloadVideo(videoId: string): Promise<Buffer> {
     }
   }
 
-  // All strategies failed
-  console.error("yt-dlp video download error - all strategies failed");
-  throw new Error(
-    `Failed to download video after trying all strategies: ${lastError?.message || "Unknown error"}`
-  );
+  // All strategies failed, try cobalt.tools as last resort
+  console.log("[Video] All yt-dlp strategies failed, trying cobalt.tools API...");
+  try {
+    return await downloadViaCobalt(videoId, "video");
+  } catch (cobaltError) {
+    console.error("[Video] Cobalt.tools also failed:", cobaltError);
+    throw new Error(
+      `Failed to download video after all methods: ${lastError?.message || "Unknown error"}`
+    );
+  }
 }
 
 export async function getVideoInfo(videoId: string) {
