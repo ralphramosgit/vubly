@@ -8,7 +8,14 @@ export default function AudioSettings() {
   const [selectedLanguage, setSelectedLanguage] = useState(0);
 
   const voices = Array(12).fill("voice 1");
-  const languages = ["English", "Spanish", "French", "German", "Japanese"];
+  const languages = [
+    "English",
+    "Spanish",
+    "French",
+    "German",
+    "Japanese",
+    "Filipino",
+  ];
 
   return (
     <div className="border-2 border-saas-yellow rounded-3xl p-3 md:p-4 lg:p-6">

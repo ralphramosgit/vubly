@@ -169,14 +169,29 @@ function DashboardContent() {
           </div>
         )}
 
+        {/* New Translation Button */}
+        <div className="mb-4 flex justify-end">
+          <button
+            onClick={() => {
+              // Clear any cached data and redirect to video input
+              window.location.href = "/videoInput";
+            }}
+            className="bg-saas-yellow hover:bg-[#E6E600] text-black font-bold px-6 py-3 rounded-lg transition-all"
+          >
+            New Translation
+          </button>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">
-          {/* Left Column - Volume Levels */}
-          <div className="lg:col-span-2 order-3 lg:order-1">
-            <VolumeLevels />
-          </div>
+          {/* Left Column - Volume Levels - Hidden for now */}
+          {false && (
+            <div className="lg:col-span-2 order-3 lg:order-1">
+              <VolumeLevels />
+            </div>
+          )}
 
           {/* Middle Column - Video and Transcripts */}
-          <div className="lg:col-span-7 order-1 lg:order-2 space-y-4 md:space-y-6">
+          <div className="lg:col-span-10 order-1 lg:order-2 space-y-4 md:space-y-6">
             {/* Video Player */}
             <VideoPlayback
               videoInfo={session.videoInfo}
@@ -202,10 +217,12 @@ function DashboardContent() {
             )}
           </div>
 
-          {/* Right Column - Audio Settings */}
-          <div className="lg:col-span-3 order-2 lg:order-3">
-            <AudioSettings />
-          </div>
+          {/* Right Column - Audio Settings - Hidden for now */}
+          {false && (
+            <div className="lg:col-span-3 order-2 lg:order-3">
+              <AudioSettings />
+            </div>
+          )}
         </div>
       </div>
     </div>
