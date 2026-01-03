@@ -1,7 +1,46 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import Image from "next/image";
+
+// Declare YouTube IFrame API types
+declare global {
+  interface Window {
+    YT: {
+      Player: new (
+        elementId: string,
+        config: {
+          videoId: string;
+          playerVars?: Record<string, number | string>;
+          events?: {
+            onReady?: (event: { target: YTPlayer }) => void;
+            onStateChange?: (event: { data: number; target: YTPlayer }) => void;
+          };
+        }
+      ) => YTPlayer;
+      PlayerState: {
+        PLAYING: number;
+        PAUSED: number;
+        ENDED: number;
+        BUFFERING: number;
+      };
+    };
+    onYouTubeIframeAPIReady?: () => void;
+  }
+}
+
+interface YTPlayer {
+  playVideo: () => void;
+  pauseVideo: () => void;
+  seekTo: (seconds: number, allowSeekAhead: boolean) => void;
+  getCurrentTime: () => number;
+  getDuration: () => number;
+  mute: () => void;
+  unMute: () => void;
+  setVolume: (volume: number) => void;
+  getPlayerState: () => number;
+  destroy: () => void;
+}
 
 interface VideoPlaybackProps {
   videoInfo: {
@@ -26,102 +65,155 @@ export default function VideoPlayback({
   hasTranslatedAudio,
   status,
 }: VideoPlaybackProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const ytPlayerRef = useRef<YTPlayer | null>(null);
+  const ytContainerRef = useRef<HTMLDivElement>(null);
+  const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [videoReady, setVideoReady] = useState(false);
-  const [videoFailed, setVideoFailed] = useState(false);
+  const [duration, setDuration] = useState(videoInfo.duration || 0);
+  const [ytReady, setYtReady] = useState(false);
+  const [ytApiLoaded, setYtApiLoaded] = useState(false);
   const [audioReady, setAudioReady] = useState(false);
 
-  // Sync video and audio playback (or audio-only if video failed)
+  // Load YouTube IFrame API on mount
   useEffect(() => {
-    const video = videoRef.current;
-    const audio = audioRef.current;
-    if (!audio) return;
+    if (status !== "completed") return;
 
-    // If video failed or not available, use audio-only mode
-    if (videoFailed || !video) {
-      const handleAudioPlay = () => setIsPlaying(true);
-      const handleAudioPause = () => setIsPlaying(false);
-      const handleAudioTimeUpdate = () => setCurrentTime(audio.currentTime);
-      const handleAudioLoadedMetadata = () => {
-        setDuration(audio.duration);
-        setAudioReady(true);
-      };
-
-      audio.addEventListener("play", handleAudioPlay);
-      audio.addEventListener("pause", handleAudioPause);
-      audio.addEventListener("timeupdate", handleAudioTimeUpdate);
-      audio.addEventListener("loadedmetadata", handleAudioLoadedMetadata);
-
-      return () => {
-        audio.removeEventListener("play", handleAudioPlay);
-        audio.removeEventListener("pause", handleAudioPause);
-        audio.removeEventListener("timeupdate", handleAudioTimeUpdate);
-        audio.removeEventListener("loadedmetadata", handleAudioLoadedMetadata);
-      };
+    // Check if YouTube API is already loaded
+    if (window.YT && window.YT.Player) {
+      setYtApiLoaded(true);
+      return;
     }
 
-    // Normal video+audio sync mode
-    const handleVideoPlay = () => {
-      audio.currentTime = video.currentTime;
-      audio.play().catch(console.error);
-      setIsPlaying(true);
-    };
+    // Load YouTube IFrame API script
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    const firstScriptTag = document.getElementsByTagName("script")[0];
+    firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
 
-    const handleVideoPause = () => {
-      audio.pause();
-      setIsPlaying(false);
+    window.onYouTubeIframeAPIReady = () => {
+      console.log("[VideoPlayback] YouTube IFrame API ready");
+      setYtApiLoaded(true);
     };
-
-    const handleVideoSeeked = () => {
-      audio.currentTime = video.currentTime;
-    };
-
-    const handleTimeUpdate = () => {
-      setCurrentTime(video.currentTime);
-      // Keep audio in sync (with small tolerance)
-      if (Math.abs(video.currentTime - audio.currentTime) > 0.3) {
-        audio.currentTime = video.currentTime;
-      }
-    };
-
-    const handleLoadedMetadata = () => {
-      setDuration(video.duration);
-      setVideoReady(true);
-    };
-
-    video.addEventListener("play", handleVideoPlay);
-    video.addEventListener("pause", handleVideoPause);
-    video.addEventListener("seeked", handleVideoSeeked);
-    video.addEventListener("timeupdate", handleTimeUpdate);
-    video.addEventListener("loadedmetadata", handleLoadedMetadata);
 
     return () => {
-      video.removeEventListener("play", handleVideoPlay);
-      video.removeEventListener("pause", handleVideoPause);
-      video.removeEventListener("seeked", handleVideoSeeked);
-      video.removeEventListener("timeupdate", handleTimeUpdate);
-      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      window.onYouTubeIframeAPIReady = undefined;
     };
-  }, [videoFailed]);
+  }, [status]);
 
-  // Handle audio mode change
+  // Initialize YouTube player
   useEffect(() => {
-    const video = videoRef.current;
+    if (!ytApiLoaded || !window.YT || !window.YT.Player) return;
+    if (ytPlayerRef.current) return; // Already initialized
+
+    const containerId = `yt-player-${videoInfo.id}`;
+
+    // Create container div if it doesn't exist
+    if (ytContainerRef.current && !document.getElementById(containerId)) {
+      const div = document.createElement("div");
+      div.id = containerId;
+      div.style.width = "100%";
+      div.style.height = "100%";
+      ytContainerRef.current.appendChild(div);
+    }
+
+    console.log("[VideoPlayback] Initializing YouTube player for", videoInfo.id);
+
+    ytPlayerRef.current = new window.YT.Player(containerId, {
+      videoId: videoInfo.id,
+      playerVars: {
+        autoplay: 0,
+        controls: 0,
+        disablekb: 1,
+        fs: 0,
+        modestbranding: 1,
+        rel: 0,
+        showinfo: 0,
+        iv_load_policy: 3,
+        playsinline: 1,
+      },
+      events: {
+        onReady: (event) => {
+          console.log("[VideoPlayback] YouTube player ready");
+          event.target.mute(); // Always mute - we use our own audio
+          const ytDuration = event.target.getDuration();
+          if (ytDuration > 0) {
+            setDuration(ytDuration);
+          }
+          setYtReady(true);
+        },
+        onStateChange: (event) => {
+          const state = event.data;
+          if (state === window.YT.PlayerState.PLAYING) {
+            setIsPlaying(true);
+            // Sync and play audio
+            if (audioRef.current) {
+              const ytTime = event.target.getCurrentTime();
+              audioRef.current.currentTime = ytTime;
+              audioRef.current.play().catch(console.error);
+            }
+          } else if (state === window.YT.PlayerState.PAUSED) {
+            setIsPlaying(false);
+            audioRef.current?.pause();
+          } else if (state === window.YT.PlayerState.ENDED) {
+            setIsPlaying(false);
+            audioRef.current?.pause();
+          }
+        },
+      },
+    });
+
+    return () => {
+      if (syncIntervalRef.current) {
+        clearInterval(syncIntervalRef.current);
+      }
+    };
+  }, [ytApiLoaded, videoInfo.id]);
+
+  // Sync time updates
+  useEffect(() => {
+    if (!ytReady || !isPlaying) {
+      if (syncIntervalRef.current) {
+        clearInterval(syncIntervalRef.current);
+        syncIntervalRef.current = null;
+      }
+      return;
+    }
+
+    syncIntervalRef.current = setInterval(() => {
+      if (ytPlayerRef.current && audioRef.current) {
+        const ytTime = ytPlayerRef.current.getCurrentTime();
+        setCurrentTime(ytTime);
+
+        // Keep audio in sync
+        if (Math.abs(ytTime - audioRef.current.currentTime) > 0.3) {
+          audioRef.current.currentTime = ytTime;
+        }
+      }
+    }, 250);
+
+    return () => {
+      if (syncIntervalRef.current) {
+        clearInterval(syncIntervalRef.current);
+      }
+    };
+  }, [ytReady, isPlaying]);
+
+  // Handle audio mode change - sync audio position
+  useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    // Sync new audio with current video/audio position
-    if (video && !videoFailed) {
-      audio.currentTime = video.currentTime;
+    if (ytPlayerRef.current && ytReady) {
+      audio.currentTime = ytPlayerRef.current.getCurrentTime();
     }
+
     if (isPlaying) {
       audio.play().catch(console.error);
     }
-  }, [audioMode, isPlaying, videoFailed]);
+  }, [audioMode, isPlaying, ytReady]);
 
   const formatTime = (time: number) => {
     const mins = Math.floor(time / 60);
@@ -129,38 +221,44 @@ export default function VideoPlayback({
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const time = parseFloat(e.target.value);
-    if (audioRef.current) {
-      audioRef.current.currentTime = time;
-    }
-    if (videoRef.current && !videoFailed) {
-      videoRef.current.currentTime = time;
-    }
-  };
+  const handleSeek = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const time = parseFloat(e.target.value);
+      setCurrentTime(time);
 
-  const togglePlayPause = () => {
-    // If video failed, use audio-only playback
-    if (videoFailed || !videoRef.current) {
+      if (ytPlayerRef.current && ytReady) {
+        ytPlayerRef.current.seekTo(time, true);
+      }
+      if (audioRef.current) {
+        audioRef.current.currentTime = time;
+      }
+    },
+    [ytReady]
+  );
+
+  const togglePlayPause = useCallback(() => {
+    if (!ytPlayerRef.current || !ytReady) {
+      // Fallback to audio-only if YouTube not ready
       if (audioRef.current) {
         if (isPlaying) {
           audioRef.current.pause();
+          setIsPlaying(false);
         } else {
           audioRef.current.play().catch(console.error);
+          setIsPlaying(true);
         }
       }
       return;
     }
-    
-    // Normal video+audio playback
-    if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play();
-      }
+
+    if (isPlaying) {
+      ytPlayerRef.current.pauseVideo();
+    } else {
+      ytPlayerRef.current.playVideo();
     }
-  };
+  }, [isPlaying, ytReady]);
+
+  const isReady = ytReady || audioReady;
 
   return (
     <div className="bg-gray-900 rounded-2xl overflow-hidden shadow-2xl">
@@ -168,58 +266,46 @@ export default function VideoPlayback({
       <div className="aspect-video bg-black relative">
         {status === "completed" ? (
           <>
-            {/* Show video if available, otherwise show thumbnail with audio controls */}
-            {!videoFailed ? (
-              <video
-                ref={videoRef}
-                className="w-full h-full"
-                poster={videoInfo.thumbnail}
-                playsInline
-                onClick={togglePlayPause}
-                onError={() => {
-                  console.log("Video failed to load, switching to audio-only mode");
-                  setVideoFailed(true);
-                }}
-              >
-                <source src={`/api/video/${sessionId}`} type="video/mp4" />
-                Your browser does not support the video tag.
-              </video>
-            ) : (
-              // Audio-only mode with thumbnail
-              <div 
-                className="w-full h-full relative cursor-pointer"
-                onClick={togglePlayPause}
-              >
-                <img
-                  src={videoInfo.thumbnail}
-                  alt={videoInfo.title}
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                  <span className="text-white text-sm bg-black/50 px-3 py-1 rounded">
-                    🎵 Audio Only (Video unavailable)
-                  </span>
+            {/* YouTube embed */}
+            <div
+              ref={ytContainerRef}
+              className="w-full h-full"
+              style={{ pointerEvents: "none" }}
+            />
+
+            {/* Clickable overlay */}
+            <div
+              className="absolute inset-0 cursor-pointer z-10"
+              onClick={togglePlayPause}
+            />
+
+            {/* Loading spinner */}
+            {!ytReady && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-20">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-saas-yellow mx-auto mb-2"></div>
+                  <p className="text-white text-sm">Loading video...</p>
                 </div>
               </div>
             )}
-            {/* Audio element for playback */}
+
+            {/* Audio element */}
             <audio
               ref={audioRef}
               src={`/api/audio/${sessionId}/${audioMode}`}
-              key={audioMode}
+              key={`${sessionId}-${audioMode}`}
+              preload="auto"
               onLoadedMetadata={() => {
-                // If video failed to load but audio loaded, use audio duration
-                if (videoFailed && audioRef.current) {
-                  setDuration(audioRef.current.duration);
-                  setAudioReady(true);
-                }
+                console.log("[VideoPlayback] Audio metadata loaded");
+                setAudioReady(true);
               }}
             />
-            {/* Play overlay - show even if video failed but audio is ready */}
-            {!isPlaying && (videoReady || audioReady || hasTranslatedAudio) && (
+
+            {/* Play overlay button */}
+            {!isPlaying && ytReady && (
               <button
                 onClick={togglePlayPause}
-                className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors"
+                className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors z-20"
               >
                 <div className="w-20 h-20 bg-saas-yellow rounded-full flex items-center justify-center shadow-lg">
                   <svg
@@ -245,7 +331,7 @@ export default function VideoPlayback({
             <div className="absolute inset-0 flex items-center justify-center bg-black/50">
               <div className="text-center">
                 <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-saas-yellow mx-auto mb-4"></div>
-                <p className="text-white font-medium">Downloading video...</p>
+                <p className="text-white font-medium">Processing video...</p>
               </div>
             </div>
           </div>
@@ -262,7 +348,7 @@ export default function VideoPlayback({
         </div>
 
         {/* Video Progress Bar */}
-        {status === "completed" && (videoReady || audioReady) && (
+        {status === "completed" && isReady && (
           <div className="space-y-2">
             <input
               type="range"
@@ -311,8 +397,13 @@ export default function VideoPlayback({
             <div className="flex items-center justify-center gap-4">
               <button
                 onClick={() => {
-                  if (videoRef.current) {
-                    videoRef.current.currentTime -= 10;
+                  const newTime = Math.max(0, currentTime - 10);
+                  setCurrentTime(newTime);
+                  if (ytPlayerRef.current && ytReady) {
+                    ytPlayerRef.current.seekTo(newTime, true);
+                  }
+                  if (audioRef.current) {
+                    audioRef.current.currentTime = newTime;
                   }
                 }}
                 className="p-2 bg-gray-800 rounded-full hover:bg-gray-700 transition-colors"
@@ -355,8 +446,13 @@ export default function VideoPlayback({
               </button>
               <button
                 onClick={() => {
-                  if (videoRef.current) {
-                    videoRef.current.currentTime += 10;
+                  const newTime = Math.min(duration, currentTime + 10);
+                  setCurrentTime(newTime);
+                  if (ytPlayerRef.current && ytReady) {
+                    ytPlayerRef.current.seekTo(newTime, true);
+                  }
+                  if (audioRef.current) {
+                    audioRef.current.currentTime = newTime;
                   }
                 }}
                 className="p-2 bg-gray-800 rounded-full hover:bg-gray-700 transition-colors"
