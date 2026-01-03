@@ -116,16 +116,16 @@ async function downloadViaCobalt(
 
   const requestBody = {
     url: url,
-    vCodec: "h264",
-    vQuality: "720",
-    aFormat: "mp3",
-    filenamePattern: "basic",
-    isAudioOnly: type === "audio",
+    videoQuality: "720",
+    audioFormat: "mp3",
+    filenameStyle: "basic",
+    downloadMode: type === "audio" ? "audio" : "auto",
   };
 
   console.log(`[Cobalt] Request body:`, JSON.stringify(requestBody));
 
-  const response = await fetch("https://api.cobalt.tools/api/json", {
+  // Use cobalt.tools v10 API
+  const response = await fetch("https://api.cobalt.tools/", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -146,10 +146,10 @@ async function downloadViaCobalt(
   console.log(`[Cobalt] Response data:`, JSON.stringify(data));
 
   if (data.status === "error" || data.status === "rate-limit") {
-    throw new Error(`Cobalt API error: ${data.text || JSON.stringify(data)}`);
+    throw new Error(`Cobalt API error: ${data.error?.code || data.text || JSON.stringify(data)}`);
   }
 
-  // Get the download URL
+  // Get the download URL from v10 API response
   const fileUrl = data.url;
   if (!fileUrl) {
     throw new Error(
