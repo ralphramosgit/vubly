@@ -11,6 +11,12 @@ export async function POST(req: NextRequest) {
   try {
     const { youtubeUrl, targetLanguage, voiceId } = await req.json();
 
+    console.log("=== /api/process RECEIVED ===");
+    console.log("Target Language from frontend:", targetLanguage);
+    console.log("Voice ID from frontend:", voiceId);
+    console.log("YouTube URL:", youtubeUrl);
+    console.log("=============================");
+
     // Validate input
     if (!youtubeUrl || !targetLanguage || !voiceId) {
       return NextResponse.json(

@@ -27,8 +27,12 @@ export async function sendToMakeWebhook(
       .trim(),
   };
 
-  console.log("Sending to Make.com (async):", webhookUrl);
-  console.log("Payload:", JSON.stringify(sanitizedPayload, null, 2));
+  console.log("=== MAKE.COM WEBHOOK DEBUG ===");
+  console.log("Webhook URL:", webhookUrl);
+  console.log("Target Language being sent:", sanitizedPayload.targetLanguage);
+  console.log("Voice ID being sent:", sanitizedPayload.voiceId);
+  console.log("Full Payload:", JSON.stringify(sanitizedPayload, null, 2));
+  console.log("==============================");
 
   try {
     const response = await fetch(webhookUrl, {
