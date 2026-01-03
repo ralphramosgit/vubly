@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "../components/ui/button";
 
@@ -23,69 +23,166 @@ const LANGUAGE_OPTIONS = [
   { code: "zh", name: "Chinese" },
 ];
 
+// Extract video ID from YouTube URL
+function extractVideoId(url: string): string | null {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
+    /youtube\.com\/embed\/([^&\n?#]+)/,
+    /youtube\.com\/v\/([^&\n?#]+)/,
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+// Client-side caption extraction using YouTube's timedtext API
+async function fetchCaptionsClientSide(videoId: string): Promise<string | null> {
+  console.log("[Client] Fetching captions for:", videoId);
+
+  try {
+    // Try different caption URL patterns
+    const captionUrls = [
+      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=srv3`,
+      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en`,
+      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&kind=asr`,
+      `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en-US`,
+    ];
+
+    for (const url of captionUrls) {
+      try {
+        console.log("[Client] Trying caption URL:", url);
+        const response = await fetch(url);
+
+        if (response.ok) {
+          const text = await response.text();
+          if (text && text.length > 100 && text.includes("<text")) {
+            // Parse XML caption format
+            const transcript = parseXmlCaptions(text);
+            if (transcript && transcript.length > 50) {
+              console.log("[Client] ✅ Got captions:", transcript.substring(0, 100));
+              return transcript;
+            }
+          }
+        }
+      } catch (e) {
+        console.log("[Client] URL failed:", url);
+      }
+    }
+
+    console.log("[Client] Direct API failed");
+    return null;
+  } catch (error) {
+    console.error("[Client] Caption fetch error:", error);
+    return null;
+  }
+}
+
+function parseXmlCaptions(xml: string): string {
+  // Parse YouTube's XML caption format
+  const textMatches = xml.matchAll(/<text[^>]*>([^<]*)<\/text>/g);
+  const segments: string[] = [];
+
+  for (const match of textMatches) {
+    let text = match[1];
+    // Decode HTML entities
+    text = text
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\n/g, " ");
+    if (text.trim()) {
+      segments.push(text.trim());
+    }
+  }
+
+  return segments.join(" ");
+}
+
 export default function VideoUpload() {
   const router = useRouter();
   const [youtubeLink, setYoutubeLink] = useState("");
   const [targetLanguage, setTargetLanguage] = useState("es");
   const [voiceId, setVoiceId] = useState("zl7szWVBXnpgrJmAalgz");
   const [loading, setLoading] = useState(false);
-  const [checking, setChecking] = useState(false);
-  const [captionStatus, setCaptionStatus] = useState<string>("");
+  const [status, setStatus] = useState("");
   const [error, setError] = useState("");
 
-  const handleCheckCaptions = async () => {
+  const handleStart = useCallback(async () => {
     if (!youtubeLink.trim()) {
       setError("Please enter a YouTube URL");
       return;
     }
 
-    setError("");
-    setCaptionStatus("");
-    setChecking(true);
-
-    try {
-      const response = await fetch("/api/check-captions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ youtubeUrl: youtubeLink }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to check captions");
-      }
-
-      setCaptionStatus(data.message);
-      if (!data.hasCaptions) {
-        setError(
-          "⚠️ This video does NOT have captions. Please try a different video."
-        );
-      }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to check captions");
-    } finally {
-      setChecking(false);
-    }
-  };
-
-  const handleStart = async () => {
-    if (!youtubeLink.trim()) {
-      setError("Please enter a YouTube URL");
+    const videoId = extractVideoId(youtubeLink);
+    if (!videoId) {
+      setError("Invalid YouTube URL");
       return;
     }
 
     setError("");
     setLoading(true);
+    setStatus("Extracting captions from YouTube...");
 
     try {
-      const response = await fetch("/api/process", {
+      // Step 1: Try to get captions client-side
+      let transcript = await fetchCaptionsClientSide(videoId);
+
+      // Step 2: If client-side fails, try server-side (fallback)
+      if (!transcript) {
+        setStatus("Trying server-side caption extraction...");
+        
+        // Try server endpoint which has the previewText
+        const checkResponse = await fetch("/api/check-captions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ youtubeUrl: youtubeLink }),
+        });
+
+        const checkData = await checkResponse.json();
+        
+        if (checkData.hasCaptions) {
+          // Server got captions, use the regular process endpoint
+          setStatus("Processing video...");
+          const response = await fetch("/api/process", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              youtubeUrl: youtubeLink,
+              targetLanguage,
+              voiceId,
+            }),
+          });
+
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.error || "Processing failed");
+          }
+          router.push(`/dashboard?session=${data.sessionId}`);
+          return;
+        }
+      }
+
+      if (!transcript) {
+        throw new Error(
+          "Could not extract captions from this video. Please make sure the video has captions enabled (look for the CC button on YouTube)."
+        );
+      }
+
+      // Step 3: Send transcript to server for processing
+      setStatus("Sending to translation service...");
+
+      const response = await fetch("/api/process-with-transcript", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           youtubeUrl: youtubeLink,
           targetLanguage,
           voiceId,
+          transcript,
         }),
       });
 
@@ -100,8 +197,9 @@ export default function VideoUpload() {
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "An error occurred");
       setLoading(false);
+      setStatus("");
     }
-  };
+  }, [youtubeLink, targetLanguage, voiceId, router]);
 
   return (
     <div className="min-h-screen bg-saas-black text-white">
@@ -119,7 +217,7 @@ export default function VideoUpload() {
 
           {/* Input and Options */}
           <div className="w-full max-w-3xl space-y-6">
-            {/* YouTube URL Input with Check Button */}
+            {/* YouTube URL Input */}
             <div className="space-y-3">
               <div className="relative">
                 <input
@@ -127,36 +225,14 @@ export default function VideoUpload() {
                   value={youtubeLink}
                   onChange={(e) => {
                     setYoutubeLink(e.target.value);
-                    setCaptionStatus("");
+                    setError("");
+                    setStatus("");
                   }}
-                  placeholder="www.youtube.com/...."
+                  placeholder="https://www.youtube.com/watch?v=..."
                   className="w-full px-8 py-5 text-lg rounded-2xl bg-white/95 text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-saas-yellow shadow-lg shadow-saas-yellow/20 transition-all duration-200"
-                  disabled={loading || checking}
+                  disabled={loading}
                 />
               </div>
-
-              {/* Check Captions Button */}
-              <Button
-                onClick={handleCheckCaptions}
-                disabled={loading || checking || !youtubeLink.trim()}
-                variant="outline"
-                className="w-full border-2 border-saas-yellow/50 text-saas-yellow hover:bg-saas-yellow/10 font-medium py-3 rounded-lg transition-all duration-200"
-              >
-                {checking ? "Checking..." : "🔍 Check if Video Has Captions"}
-              </Button>
-
-              {/* Caption Status */}
-              {captionStatus && (
-                <div
-                  className={`px-4 py-3 rounded-lg text-sm ${
-                    captionStatus.includes("✅")
-                      ? "bg-green-500/20 border border-green-500 text-green-300"
-                      : "bg-yellow-500/20 border border-yellow-500 text-yellow-300"
-                  }`}
-                >
-                  {captionStatus}
-                </div>
-              )}
             </div>
 
             {/* Language and Voice Selection */}
@@ -200,6 +276,13 @@ export default function VideoUpload() {
               </div>
             </div>
 
+            {/* Status Message */}
+            {status && (
+              <div className="bg-blue-500/20 border border-blue-500 text-blue-300 px-4 py-3 rounded-lg">
+                {status}
+              </div>
+            )}
+
             {/* Error Message */}
             {error && (
               <div className="bg-red-500/20 border border-red-500 text-red-300 px-4 py-3 rounded-lg">
@@ -223,11 +306,19 @@ export default function VideoUpload() {
               <div className="text-center text-gray-400 text-sm">
                 <p>This may take a few minutes...</p>
                 <p className="mt-2">
-                  We&apos;re downloading the audio, transcribing it, and
-                  translating it for you.
+                  We&apos;re extracting captions and sending them for translation.
                 </p>
               </div>
             )}
+
+            {/* Help Text */}
+            <div className="text-center text-gray-500 text-sm mt-8">
+              <p>
+                💡 Make sure your video has captions enabled. Look for the{" "}
+                <span className="font-mono bg-gray-800 px-1 rounded">CC</span>{" "}
+                button on YouTube.
+              </p>
+            </div>
           </div>
         </div>
       </div>
