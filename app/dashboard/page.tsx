@@ -32,7 +32,7 @@ function DashboardContent() {
   const sessionId = searchParams.get("session");
   const [session, setSession] = useState<SessionStatus | null>(null);
   const [audioMode, setAudioMode] = useState<"original" | "translated">(
-    "original"
+    "translated"
   );
 
   useEffect(() => {

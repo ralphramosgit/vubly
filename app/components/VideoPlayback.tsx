@@ -148,11 +148,18 @@ export default function VideoPlayback({
           const state = event.data;
           if (state === window.YT.PlayerState.PLAYING) {
             setIsPlaying(true);
-            // Sync and play audio
+            // Only sync audio if significantly out of sync (prevents looping)
             if (audioRef.current) {
               const ytTime = event.target.getCurrentTime();
-              audioRef.current.currentTime = ytTime;
-              audioRef.current.play().catch(console.error);
+              const audioTime = audioRef.current.currentTime;
+              // Only resync if more than 1 second apart
+              if (Math.abs(ytTime - audioTime) > 1) {
+                audioRef.current.currentTime = ytTime;
+              }
+              // Only play if not already playing
+              if (audioRef.current.paused) {
+                audioRef.current.play().catch(console.error);
+              }
             }
           } else if (state === window.YT.PlayerState.PAUSED) {
             setIsPlaying(false);
@@ -187,12 +194,13 @@ export default function VideoPlayback({
         const ytTime = ytPlayerRef.current.getCurrentTime();
         setCurrentTime(ytTime);
 
-        // Keep audio in sync
-        if (Math.abs(ytTime - audioRef.current.currentTime) > 0.3) {
+        // Keep audio in sync - only if more than 0.5s apart to prevent jitter
+        const drift = Math.abs(ytTime - audioRef.current.currentTime);
+        if (drift > 0.5 && drift < 10) {
           audioRef.current.currentTime = ytTime;
         }
       }
-    }, 250);
+    }, 500);
 
     return () => {
       if (syncIntervalRef.current) {
