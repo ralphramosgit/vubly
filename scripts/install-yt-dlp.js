@@ -79,9 +79,9 @@ async function installYtDlp() {
     const ytdlpPath = path.join(binDir, "yt-dlp");
 
     // Download yt-dlp STANDALONE binary for Linux (not the Python script)
-    console.log("Downloading NIGHTLY build from GitHub (latest fixes)...");
+    console.log("Downloading standalone Linux binary from GitHub...");
     await downloadFile(
-      "https://github.com/yt-dlp/yt-dlp/releases/download/nightly/yt-dlp_linux",
+      "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux",
       ytdlpPath
     );
 
