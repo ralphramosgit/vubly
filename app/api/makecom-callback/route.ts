@@ -3,21 +3,53 @@ import { updateSession } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
   try {
-    const { sessionId, translation, audioData } = await req.json();
+    const body = await req.json();
+    console.log("Make.com callback received body:", JSON.stringify(body, null, 2));
 
-    if (!sessionId || !translation || !audioData) {
+    // Accept a few common field names for compatibility
+    const sessionId = body.sessionId || body.session_id || body.session || body.id;
+    const translation =
+      body.translation || body.translatedText || body.text || body.translation_text || body.data?.translation || body.data?.translatedText;
+
+    let audioBase64 =
+      body.audioData || body.audio_base64 || body.audio || body.data?.audio_base64 || body.data?.audio || body.data?.data;
+
+    // Some modules may return arrays/objects — normalize
+    if (Array.isArray(audioBase64)) {
+      audioBase64 = audioBase64[0];
+    }
+    if (typeof audioBase64 === "object" && audioBase64?.data) {
+      audioBase64 = audioBase64.data;
+    }
+
+    // If the audio is a data URL like "data:audio/mpeg;base64,..." strip the prefix
+    if (typeof audioBase64 === "string" && audioBase64.startsWith("data:")) {
+      const parts = audioBase64.split(",");
+      audioBase64 = parts[1] || parts[0];
+    }
+
+    if (!sessionId || !translation || !audioBase64) {
+      console.error("Make.com callback missing required fields", {
+        sessionId: !!sessionId,
+        translation: !!translation,
+        audioFound: !!audioBase64,
+      });
+
       return NextResponse.json(
-        { error: "Missing required fields: sessionId, translation, audioData" },
+        {
+          error: "Missing required fields: sessionId, translation, audioData",
+          received: {
+            sessionId: sessionId || null,
+            translation: translation ? "[present]" : null,
+            audioKeys: Object.keys(body || {}),
+          },
+        },
         { status: 400 }
       );
     }
 
-    console.log(
-      `[${sessionId}] Received Make.com callback with translation and audio`
-    );
-
     // Convert base64 audio to buffer
-    const translatedAudioBuffer = Buffer.from(audioData, "base64");
+    const translatedAudioBuffer = Buffer.from(audioBase64, "base64");
 
     // Update session with translated content
     await updateSession(sessionId, {
@@ -26,7 +58,7 @@ export async function POST(req: NextRequest) {
       status: "completed",
     });
 
-    console.log(`[${sessionId}] Session updated successfully`);
+    console.log(`[${sessionId}] Session updated successfully via Make.com callback`);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

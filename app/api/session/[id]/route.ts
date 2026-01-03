@@ -12,6 +12,18 @@ export async function GET(
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
   }
 
+  // Check if audio data is requested
+  const url = new URL(req.url);
+  const includeAudio = url.searchParams.get("includeAudio") === "true";
+
+  if (includeAudio && session.translatedAudio) {
+    // Return the full session with audio data
+    return NextResponse.json({
+      ...session,
+      translatedAudio: session.translatedAudio,
+    });
+  }
+
   // Don't send binary data in status check
   const { originalAudio, translatedAudio, videoBuffer, ...sessionData } =
     session;
