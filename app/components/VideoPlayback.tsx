@@ -119,7 +119,10 @@ export default function VideoPlayback({
       ytContainerRef.current.appendChild(div);
     }
 
-    console.log("[VideoPlayback] Initializing YouTube player for", videoInfo.id);
+    console.log(
+      "[VideoPlayback] Initializing YouTube player for",
+      videoInfo.id
+    );
 
     ytPlayerRef.current = new window.YT.Player(containerId, {
       videoId: videoInfo.id,
