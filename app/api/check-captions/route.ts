@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { extractVideoId } from "@/lib/youtube";
+import { extractVideoId, extractSubtitlesViaYtdlp } from "@/lib/youtube";
 import { getYouTubeTranscript } from "@/lib/youtube-transcript";
-import { getYouTubeTranscriptViaInnertube } from "@/lib/youtube-transcript-innertube";
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,22 +21,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Try Method 1: youtube-transcript
-    let transcript = await getYouTubeTranscript(videoId);
+    // Use the unified transcript function which tries all methods
+    const transcript = await getYouTubeTranscript(videoId);
 
-    // Try Method 2: youtubei.js
-    if (!transcript) {
-      console.log(
-        `[Check] First method failed, trying innertube for ${videoId}...`
-      );
-      transcript = await getYouTubeTranscriptViaInnertube(videoId);
-    }
-
-    if (transcript) {
+    if (transcript && transcript.length > 50) {
       return NextResponse.json({
         hasCaptions: true,
         videoId,
         previewText: transcript.substring(0, 200),
+        transcriptLength: transcript.length,
         message: "✅ This video has captions and can be processed",
       });
     } else {
@@ -45,7 +37,7 @@ export async function POST(req: NextRequest) {
         hasCaptions: false,
         videoId,
         message:
-          "⚠️ This video does NOT have captions available. Please choose a different video with auto-generated captions or subtitles enabled.",
+          "⚠️ Could not extract captions from this video. The video may have captions disabled or be protected.",
       });
     }
   } catch (error) {

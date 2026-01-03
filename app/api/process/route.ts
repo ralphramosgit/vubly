@@ -6,7 +6,6 @@ import {
   getVideoInfo,
 } from "@/lib/youtube";
 import { getYouTubeTranscript } from "@/lib/youtube-transcript";
-import { getYouTubeTranscriptViaInnertube } from "@/lib/youtube-transcript-innertube";
 import { transcribeAudio, detectLanguage } from "@/lib/openai";
 import { sendToMakeWebhook } from "@/lib/makecom";
 import { createSession, updateSession } from "@/lib/session";
@@ -72,21 +71,14 @@ async function processVideoAndTriggerWebhook(
   voiceId: string
 ) {
   try {
-    // Step 1: Try to get transcript from YouTube captions first
-    console.log(`[${sessionId}] Checking for YouTube captions...`);
+    // Step 1: Get transcript using all available methods (yt-dlp subtitles, youtube-transcript)
+    console.log(`[${sessionId}] Getting transcript for video ${videoId}...`);
     let transcript = "";
 
-    // Try Method 1: youtube-transcript package
-    let youtubeTranscript = await getYouTubeTranscript(videoId);
-
-    // Try Method 2: youtubei.js if first method failed
-    if (!youtubeTranscript) {
-      console.log(`[${sessionId}] First method failed, trying youtubei.js...`);
-      youtubeTranscript = await getYouTubeTranscriptViaInnertube(videoId);
-    }
+    const youtubeTranscript = await getYouTubeTranscript(videoId);
 
     if (youtubeTranscript) {
-      console.log(`[${sessionId}] ✅ Using YouTube captions as transcript`);
+      console.log(`[${sessionId}] ✅ Got transcript (${youtubeTranscript.length} chars)`);
       transcript = youtubeTranscript;
       await updateSession(sessionId, { transcript, status: "processing" });
     } else {

@@ -3,7 +3,6 @@ import { promisify } from "util";
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { YoutubeTranscript } from "youtube-transcript";
 
 const execAsync = promisify(exec);
 
@@ -45,6 +44,128 @@ export function extractVideoId(url: string): string | null {
     if (match) return match[1];
   }
   return null;
+}
+
+// Extract subtitles/captions using yt-dlp (different endpoint than video download)
+export async function extractSubtitlesViaYtdlp(
+  videoId: string
+): Promise<string | null> {
+  const url = `https://www.youtube.com/watch?v=${videoId}`;
+  const tempDir = os.tmpdir();
+  const outputBase = path.join(tempDir, `${videoId}_subs`);
+
+  console.log(`[Subtitles] Extracting subtitles for ${videoId} via yt-dlp...`);
+
+  // Try multiple strategies for subtitle extraction
+  const strategies = [
+    // Strategy 1: Auto-generated subtitles with vtt format
+    {
+      name: "auto-sub-vtt",
+      args: `--skip-download --write-auto-sub --sub-lang "en.*" --sub-format vtt --convert-subs vtt`,
+    },
+    // Strategy 2: Manual subtitles
+    {
+      name: "manual-sub",
+      args: `--skip-download --write-sub --sub-lang "en.*" --sub-format vtt --convert-subs vtt`,
+    },
+    // Strategy 3: Any available subtitles
+    {
+      name: "any-sub",
+      args: `--skip-download --write-auto-sub --write-sub --sub-lang "en,en-US,en-GB,en-orig" --sub-format vtt`,
+    },
+    // Strategy 4: List available subtitles first
+    {
+      name: "all-subs",
+      args: `--skip-download --all-subs --sub-format vtt`,
+    },
+  ];
+
+  for (const strategy of strategies) {
+    console.log(`[Subtitles] Trying strategy: ${strategy.name}`);
+
+    try {
+      // Clean up any existing subtitle files
+      const files = fs.readdirSync(tempDir);
+      for (const file of files) {
+        if (
+          file.startsWith(`${videoId}_subs`) &&
+          (file.endsWith(".vtt") ||
+            file.endsWith(".srt") ||
+            file.endsWith(".json"))
+        ) {
+          fs.unlinkSync(path.join(tempDir, file));
+        }
+      }
+
+      const command = `${ytdlpPath} ${strategy.args} -o "${outputBase}" "${url}"`;
+      console.log(`[Subtitles] Running: ${command}`);
+
+      const { stdout, stderr } = await execAsync(command, {
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: 60000,
+      });
+
+      console.log(`[Subtitles] stdout: ${stdout}`);
+      if (stderr) console.log(`[Subtitles] stderr: ${stderr}`);
+
+      // Look for downloaded subtitle files
+      const subtitleFiles = fs.readdirSync(tempDir).filter((f) => {
+        return (
+          f.startsWith(`${videoId}_subs`) &&
+          (f.endsWith(".vtt") || f.endsWith(".srt"))
+        );
+      });
+
+      console.log(`[Subtitles] Found subtitle files:`, subtitleFiles);
+
+      if (subtitleFiles.length > 0) {
+        // Read the first subtitle file found
+        const subPath = path.join(tempDir, subtitleFiles[0]);
+        const content = fs.readFileSync(subPath, "utf-8");
+
+        // Parse VTT/SRT and extract text
+        const transcript = parseSubtitleFile(content);
+
+        // Cleanup
+        for (const f of subtitleFiles) {
+          try {
+            fs.unlinkSync(path.join(tempDir, f));
+          } catch {}
+        }
+
+        if (transcript && transcript.length > 50) {
+          console.log(
+            `[Subtitles] ✅ Successfully extracted ${transcript.length} chars of transcript`
+          );
+          return transcript;
+        }
+      }
+    } catch (error) {
+      console.log(
+        `[Subtitles] Strategy ${strategy.name} failed:`,
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  }
+
+  console.log(`[Subtitles] ❌ All subtitle extraction strategies failed`);
+  return null;
+}
+
+function parseSubtitleFile(content: string): string {
+  // Remove VTT header and metadata
+  let text = content
+    .replace(/^WEBVTT[\s\S]*?\n\n/, "") // Remove VTT header
+    .replace(/^\d+\n/gm, "") // Remove SRT sequence numbers
+    .replace(/\d{2}:\d{2}:\d{2}[.,]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[.,]\d{3}/g, "") // Remove timestamps
+    .replace(/<[^>]+>/g, "") // Remove HTML tags
+    .replace(/\{[^}]+\}/g, "") // Remove style tags
+    .replace(/\n{2,}/g, " ") // Replace multiple newlines with space
+    .replace(/\n/g, " ") // Replace single newlines with space
+    .replace(/\s+/g, " ") // Normalize whitespace
+    .trim();
+
+  return text;
 }
 
 export async function downloadAudio(videoId: string): Promise<Buffer> {
