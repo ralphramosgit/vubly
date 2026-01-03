@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  extractVideoId,
-  downloadAudio,
-  downloadVideo,
-  getVideoInfo,
-} from "@/lib/youtube";
-import { getYouTubeTranscript } from "@/lib/youtube-transcript";
+import { extractVideoId, downloadVideo, getVideoInfo } from "@/lib/youtube";
+import { downloadYouTubeAudio } from "@/lib/youtube-download";
 import { transcribeAudio, detectLanguage } from "@/lib/openai";
 import { sendToMakeWebhook } from "@/lib/makecom";
 import { createSession, updateSession } from "@/lib/session";
@@ -71,111 +66,73 @@ async function processVideoAndTriggerWebhook(
   voiceId: string
 ) {
   try {
-    // Step 1: Get transcript using all available methods (yt-dlp subtitles, youtube-transcript)
-    console.log(`[${sessionId}] Getting transcript for video ${videoId}...`);
-    let transcript = "";
+    // NEW WORKFLOW:
+    // 1. Download audio via third-party (y2mate/RapidAPI) - bypasses YouTube bot detection
+    // 2. Transcribe with OpenAI Whisper
+    // 3. Send transcript to Make.com
 
-    const youtubeTranscript = await getYouTubeTranscript(videoId);
-
-    if (youtubeTranscript) {
-      console.log(`[${sessionId}] ✅ Got transcript (${youtubeTranscript.length} chars)`);
-      transcript = youtubeTranscript;
-      await updateSession(sessionId, { transcript, status: "processing" });
-    } else {
-      console.log(
-        `[${sessionId}] ⚠️ Could not fetch captions from YouTube with either method`
-      );
-    }
-
-    // Step 2: Download audio and video (skip audio if we have transcript)
-    let audioBuffer: Buffer | null = null;
-    let videoBuffer: Buffer | null = null;
-
-    if (!transcript) {
-      // Only download audio if we don't have transcript
-      console.log(
-        `[${sessionId}] No captions found, downloading audio for transcription...`
-      );
-      try {
-        audioBuffer = await downloadAudio(videoId);
-        console.log(
-          `[${sessionId}] Audio downloaded: ${audioBuffer.length} bytes`
-        );
-      } catch (audioError) {
-        console.error(`[${sessionId}] Audio download failed:`, audioError);
-        throw new Error("No transcript available and audio download failed");
-      }
-    } else {
-      console.log(
-        `[${sessionId}] Skipping audio download (have transcript from YouTube)`
-      );
-    }
-
-    // Try to download video (non-fatal if fails)
+    // Step 1: Download audio using third-party services
+    console.log(`[${sessionId}] Downloading audio via third-party service...`);
+    let audioBuffer: Buffer;
+    
     try {
-      videoBuffer = await downloadVideo(videoId);
-      console.log(
-        `[${sessionId}] Video downloaded: ${videoBuffer.length} bytes`
-      );
-    } catch (videoError) {
-      console.warn(
-        `[${sessionId}] Video download failed (non-fatal):`,
-        videoError
-      );
-      console.log(`[${sessionId}] Continuing without video...`);
+      audioBuffer = await downloadYouTubeAudio(videoId);
+      console.log(`[${sessionId}] ✅ Audio downloaded: ${audioBuffer.length} bytes`);
+    } catch (downloadError) {
+      console.error(`[${sessionId}] Audio download failed:`, downloadError);
+      throw new Error(`Failed to download audio: ${downloadError instanceof Error ? downloadError.message : 'Unknown error'}`);
     }
 
     await updateSession(sessionId, {
-      originalAudio: audioBuffer || undefined,
-      videoBuffer: videoBuffer || undefined,
+      originalAudio: audioBuffer,
+      status: "processing",
     });
 
-    // Step 3: Transcribe audio if we didn't get YouTube transcript
-    if (!transcript && audioBuffer) {
-      console.log(`[${sessionId}] Transcribing audio...`);
-      try {
-        const transcription = await transcribeAudio(audioBuffer);
-        transcript = transcription.text;
-        await updateSession(sessionId, { transcript });
-        console.log(
-          `[${sessionId}] Transcription complete: ${transcript.substring(0, 100)}...`
-        );
-      } catch (transcribeError) {
-        console.error(`[${sessionId}] TRANSCRIPTION FAILED:`, transcribeError);
-        throw transcribeError;
-      }
+    // Step 2: Transcribe audio with OpenAI Whisper
+    console.log(`[${sessionId}] Transcribing audio with Whisper...`);
+    let transcript: string;
+    
+    try {
+      const transcription = await transcribeAudio(audioBuffer);
+      transcript = transcription.text;
+      await updateSession(sessionId, { transcript });
+      console.log(`[${sessionId}] ✅ Transcription complete (${transcript.length} chars)`);
+      console.log(`[${sessionId}] Preview: ${transcript.substring(0, 200)}...`);
+    } catch (transcribeError) {
+      console.error(`[${sessionId}] Transcription failed:`, transcribeError);
+      throw new Error(`Failed to transcribe audio: ${transcribeError instanceof Error ? transcribeError.message : 'Unknown error'}`);
     }
 
-    if (!transcript) {
-      throw new Error(
-        "Unable to get transcript for this video. This video may have captions disabled or is protected by YouTube. Please try a different video, preferably one with auto-generated captions enabled."
-      );
-    }
-
-    // Step 4: Detect language
-    console.log(`[${sessionId}] Starting language detection...`);
+    // Step 3: Detect language
+    console.log(`[${sessionId}] Detecting language...`);
     let detectedLanguage = "en";
     try {
       detectedLanguage = await detectLanguage(transcript);
       await updateSession(sessionId, { detectedLanguage });
-      console.log(`[${sessionId}] Language detected: ${detectedLanguage}`);
+      console.log(`[${sessionId}] ✅ Language detected: ${detectedLanguage}`);
     } catch (detectError) {
-      console.error(`[${sessionId}] LANGUAGE DETECTION FAILED:`, detectError);
-      throw detectError;
+      console.error(`[${sessionId}] Language detection failed:`, detectError);
+      // Non-fatal, continue with default
     }
 
-    // Step 4: Send to Make.com for translation & TTS (async)
-    console.log(`[${sessionId}] Preparing to send to Make.com webhook...`);
+    // Step 4: Try to download video (non-fatal if fails)
+    let videoBuffer: Buffer | null = null;
+    try {
+      console.log(`[${sessionId}] Downloading video...`);
+      videoBuffer = await downloadVideo(videoId);
+      console.log(`[${sessionId}] ✅ Video downloaded: ${videoBuffer.length} bytes`);
+      await updateSession(sessionId, { videoBuffer });
+    } catch (videoError) {
+      console.warn(`[${sessionId}] ⚠️ Video download failed (non-fatal):`, videoError);
+    }
+
+    // Step 5: Send to Make.com for translation & TTS
+    console.log(`[${sessionId}] Sending to Make.com webhook...`);
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const callbackUrl = `${baseUrl}/api/makecom-callback`;
 
-    console.log(`[${sessionId}] Callback URL: ${callbackUrl}`);
-    console.log(`[${sessionId}] Target language: ${targetLanguage}`);
-    console.log(`[${sessionId}] Voice ID: ${voiceId}`);
-
     try {
-      console.log(`[${sessionId}] Calling sendToMakeWebhook NOW...`);
       const webhookResult = await sendToMakeWebhook({
         sessionId,
         transcript,
@@ -184,22 +141,15 @@ async function processVideoAndTriggerWebhook(
         voiceId,
         callbackUrl,
       });
-      console.log(`[${sessionId}] WEBHOOK CALL COMPLETE:`, webhookResult);
+      console.log(`[${sessionId}] ✅ Webhook sent successfully:`, webhookResult);
     } catch (webhookError) {
-      console.error(`[${sessionId}] WEBHOOK CALL FAILED:`, webhookError);
+      console.error(`[${sessionId}] Webhook failed:`, webhookError);
       throw webhookError;
     }
 
-    console.log(
-      `[${sessionId}] ✅ All steps complete. Waiting for Make.com callback at ${callbackUrl}`
-    );
+    console.log(`[${sessionId}] ✅ Processing complete. Waiting for Make.com callback.`);
   } catch (error: unknown) {
     console.error(`[${sessionId}] ❌ FATAL ERROR:`, error);
-    console.error(`[${sessionId}] Error type:`, typeof error);
-    console.error(
-      `[${sessionId}] Error details:`,
-      error instanceof Error ? error.stack : String(error)
-    );
     await updateSession(sessionId, {
       status: "error",
       error: error instanceof Error ? error.message : "Unknown error occurred",
