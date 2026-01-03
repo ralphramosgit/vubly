@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { Button } from "../components/ui/button";
 
 const VOICE_OPTIONS = [
-  { id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel (Female, American)" },
-  { id: "pNInz6obpgDQGcFmaJgB", name: "Adam (Male, American)" },
-  { id: "ErXwobaYiN019PkySvjV", name: "Antoni (Male, British)" },
-  { id: "EXAVITQu4vr4xnSDxMaL", name: "Bella (Female, American)" },
+  { id: "zl7szWVBXnpgrJmAalgz", name: "Lily" },
+  { id: "gUABw7pXQjhjt0kNFBTF", name: "Andrew" },
+  { id: "tnSpp4vdxKPjI9w0GnoV", name: "Hope" },
+  { id: "NNl6r8mD7vthiJatiJt1", name: "Bradford" },
 ];
 
 const LANGUAGE_OPTIONS = [
@@ -27,7 +27,7 @@ export default function VideoUpload() {
   const router = useRouter();
   const [youtubeLink, setYoutubeLink] = useState("");
   const [targetLanguage, setTargetLanguage] = useState("es");
-  const [voiceId, setVoiceId] = useState("21m00Tcm4TlvDq8ikWAM");
+  const [voiceId, setVoiceId] = useState("zl7szWVBXnpgrJmAalgz");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 

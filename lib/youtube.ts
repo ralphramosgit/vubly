@@ -52,9 +52,9 @@ export async function downloadAudio(videoId: string): Promise<Buffer> {
   const outputPath = path.join(tempDir, `${videoId}_audio.mp3`);
 
   try {
-    // Use yt-dlp with aggressive bypass options
+    // Use yt-dlp with OAuth and improved bypass options
     await execAsync(
-      `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=android,web;player_skip=webpage,configs" --user-agent "com.google.android.youtube/19.09.37 (Linux; U; Android 13) gzip" --no-check-certificates --extractor-retries 3 -x --audio-format mp3 --audio-quality 0 -o "${outputPath}" "${url}"`,
+      `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=ios,mweb;player_skip=webpage" --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15" --no-check-certificates --extractor-retries 5 --add-header "Accept-Language:en-US,en" -x --audio-format mp3 --audio-quality 0 -o "${outputPath}" "${url}"`,
       { maxBuffer: 50 * 1024 * 1024, timeout: 120000 }
     );
 
@@ -96,9 +96,9 @@ export async function downloadVideo(videoId: string): Promise<Buffer> {
   const outputPath = path.join(tempDir, `${videoId}_video.mp4`);
 
   try {
-    // Use yt-dlp with aggressive bypass options
+    // Use yt-dlp with OAuth and improved bypass options
     await execAsync(
-      `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=android,web;player_skip=webpage,configs" --user-agent "com.google.android.youtube/19.09.37 (Linux; U; Android 13) gzip" --no-check-certificates --extractor-retries 3 -f "bestvideo[ext=mp4]/best[ext=mp4]" -o "${outputPath}" "${url}"`,
+      `${ytdlpPath}${ffmpegLocation} --extractor-args "youtube:player_client=ios,mweb;player_skip=webpage" --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15" --no-check-certificates --extractor-retries 5 --add-header "Accept-Language:en-US,en" -f "bestvideo[ext=mp4]/best[ext=mp4]" -o "${outputPath}" "${url}"`,
       { maxBuffer: 100 * 1024 * 1024, timeout: 120000 }
     );
 
