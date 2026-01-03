@@ -147,7 +147,9 @@ async function downloadViaCobalt(
   console.log(`[Cobalt] Response data:`, JSON.stringify(data));
 
   if (data.status === "error" || data.status === "rate-limit") {
-    throw new Error(`Cobalt API error: ${data.error?.code || data.text || JSON.stringify(data)}`);
+    throw new Error(
+      `Cobalt API error: ${data.error?.code || data.text || JSON.stringify(data)}`
+    );
   }
 
   // Get the download URL from v10 API response

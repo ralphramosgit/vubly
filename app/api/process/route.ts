@@ -74,9 +74,9 @@ async function processVideoAndTriggerWebhook(
     // Step 1: Try to get transcript from YouTube captions first
     console.log(`[${sessionId}] Checking for YouTube captions...`);
     let transcript = "";
-    
+
     const youtubeTranscript = await getYouTubeTranscript(videoId);
-    
+
     if (youtubeTranscript) {
       console.log(`[${sessionId}] ✅ Using YouTube captions as transcript`);
       transcript = youtubeTranscript;
@@ -86,33 +86,44 @@ async function processVideoAndTriggerWebhook(
     // Step 2: Download audio and video (skip audio if we have transcript)
     let audioBuffer: Buffer | null = null;
     let videoBuffer: Buffer | null = null;
-    
+
     if (!transcript) {
       // Only download audio if we don't have transcript
-      console.log(`[${sessionId}] No captions found, downloading audio for transcription...`);
+      console.log(
+        `[${sessionId}] No captions found, downloading audio for transcription...`
+      );
       try {
         audioBuffer = await downloadAudio(videoId);
-        console.log(`[${sessionId}] Audio downloaded: ${audioBuffer.length} bytes`);
+        console.log(
+          `[${sessionId}] Audio downloaded: ${audioBuffer.length} bytes`
+        );
       } catch (audioError) {
         console.error(`[${sessionId}] Audio download failed:`, audioError);
         throw new Error("No transcript available and audio download failed");
       }
     } else {
-      console.log(`[${sessionId}] Skipping audio download (have transcript from YouTube)`);
+      console.log(
+        `[${sessionId}] Skipping audio download (have transcript from YouTube)`
+      );
     }
-    
+
     // Try to download video (non-fatal if fails)
     try {
       videoBuffer = await downloadVideo(videoId);
-      console.log(`[${sessionId}] Video downloaded: ${videoBuffer.length} bytes`);
+      console.log(
+        `[${sessionId}] Video downloaded: ${videoBuffer.length} bytes`
+      );
     } catch (videoError) {
-      console.warn(`[${sessionId}] Video download failed (non-fatal):`, videoError);
+      console.warn(
+        `[${sessionId}] Video download failed (non-fatal):`,
+        videoError
+      );
       console.log(`[${sessionId}] Continuing without video...`);
     }
 
-    await updateSession(sessionId, { 
+    await updateSession(sessionId, {
       originalAudio: audioBuffer || undefined,
-      videoBuffer: videoBuffer || undefined 
+      videoBuffer: videoBuffer || undefined,
     });
 
     // Step 3: Transcribe audio if we didn't get YouTube transcript
@@ -132,7 +143,9 @@ async function processVideoAndTriggerWebhook(
     }
 
     if (!transcript) {
-      throw new Error("Failed to obtain transcript from any source");
+      throw new Error(
+        "Unable to get transcript for this video. This video may have captions disabled or is protected by YouTube. Please try a different video, preferably one with auto-generated captions enabled."
+      );
     }
 
     // Step 4: Detect language
