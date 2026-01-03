@@ -8,7 +8,9 @@ export async function getYouTubeTranscript(
   console.log(`[Transcript] Fetching YouTube captions for ${videoId}...`);
 
   // METHOD 1: Try direct HTML parsing FIRST (most reliable, no dependencies)
-  console.log(`[Transcript] Method 1: Trying direct HTML caption extraction...`);
+  console.log(
+    `[Transcript] Method 1: Trying direct HTML caption extraction...`
+  );
   try {
     const directTranscript = await extractCaptionsDirectly(videoId);
     if (directTranscript && directTranscript.length > 50) {

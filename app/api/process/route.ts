@@ -74,13 +74,17 @@ async function processVideoAndTriggerWebhook(
     // Step 1: Download audio using third-party services
     console.log(`[${sessionId}] Downloading audio via third-party service...`);
     let audioBuffer: Buffer;
-    
+
     try {
       audioBuffer = await downloadYouTubeAudio(videoId);
-      console.log(`[${sessionId}] ✅ Audio downloaded: ${audioBuffer.length} bytes`);
+      console.log(
+        `[${sessionId}] ✅ Audio downloaded: ${audioBuffer.length} bytes`
+      );
     } catch (downloadError) {
       console.error(`[${sessionId}] Audio download failed:`, downloadError);
-      throw new Error(`Failed to download audio: ${downloadError instanceof Error ? downloadError.message : 'Unknown error'}`);
+      throw new Error(
+        `Failed to download audio: ${downloadError instanceof Error ? downloadError.message : "Unknown error"}`
+      );
     }
 
     await updateSession(sessionId, {
@@ -91,16 +95,20 @@ async function processVideoAndTriggerWebhook(
     // Step 2: Transcribe audio with OpenAI Whisper
     console.log(`[${sessionId}] Transcribing audio with Whisper...`);
     let transcript: string;
-    
+
     try {
       const transcription = await transcribeAudio(audioBuffer);
       transcript = transcription.text;
       await updateSession(sessionId, { transcript });
-      console.log(`[${sessionId}] ✅ Transcription complete (${transcript.length} chars)`);
+      console.log(
+        `[${sessionId}] ✅ Transcription complete (${transcript.length} chars)`
+      );
       console.log(`[${sessionId}] Preview: ${transcript.substring(0, 200)}...`);
     } catch (transcribeError) {
       console.error(`[${sessionId}] Transcription failed:`, transcribeError);
-      throw new Error(`Failed to transcribe audio: ${transcribeError instanceof Error ? transcribeError.message : 'Unknown error'}`);
+      throw new Error(
+        `Failed to transcribe audio: ${transcribeError instanceof Error ? transcribeError.message : "Unknown error"}`
+      );
     }
 
     // Step 3: Detect language
@@ -120,10 +128,15 @@ async function processVideoAndTriggerWebhook(
     try {
       console.log(`[${sessionId}] Downloading video...`);
       videoBuffer = await downloadVideo(videoId);
-      console.log(`[${sessionId}] ✅ Video downloaded: ${videoBuffer.length} bytes`);
+      console.log(
+        `[${sessionId}] ✅ Video downloaded: ${videoBuffer.length} bytes`
+      );
       await updateSession(sessionId, { videoBuffer });
     } catch (videoError) {
-      console.warn(`[${sessionId}] ⚠️ Video download failed (non-fatal):`, videoError);
+      console.warn(
+        `[${sessionId}] ⚠️ Video download failed (non-fatal):`,
+        videoError
+      );
     }
 
     // Step 5: Send to Make.com for translation & TTS
@@ -141,13 +154,18 @@ async function processVideoAndTriggerWebhook(
         voiceId,
         callbackUrl,
       });
-      console.log(`[${sessionId}] ✅ Webhook sent successfully:`, webhookResult);
+      console.log(
+        `[${sessionId}] ✅ Webhook sent successfully:`,
+        webhookResult
+      );
     } catch (webhookError) {
       console.error(`[${sessionId}] Webhook failed:`, webhookError);
       throw webhookError;
     }
 
-    console.log(`[${sessionId}] ✅ Processing complete. Waiting for Make.com callback.`);
+    console.log(
+      `[${sessionId}] ✅ Processing complete. Waiting for Make.com callback.`
+    );
   } catch (error: unknown) {
     console.error(`[${sessionId}] ❌ FATAL ERROR:`, error);
     await updateSession(sessionId, {

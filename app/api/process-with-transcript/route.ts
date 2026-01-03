@@ -10,7 +10,8 @@ export const maxDuration = 300;
 // The client extracts captions using their browser (not blocked by YouTube)
 export async function POST(req: NextRequest) {
   try {
-    const { youtubeUrl, targetLanguage, voiceId, transcript } = await req.json();
+    const { youtubeUrl, targetLanguage, voiceId, transcript } =
+      await req.json();
 
     // Validate input
     if (!youtubeUrl || !targetLanguage || !voiceId) {
@@ -22,7 +23,10 @@ export async function POST(req: NextRequest) {
 
     if (!transcript || transcript.length < 10) {
       return NextResponse.json(
-        { error: "No transcript provided. Please ensure the video has captions enabled." },
+        {
+          error:
+            "No transcript provided. Please ensure the video has captions enabled.",
+        },
         { status: 400 }
       );
     }
@@ -42,7 +46,9 @@ export async function POST(req: NextRequest) {
     // Create session
     const sessionId = await createSession(videoId, videoInfo);
 
-    console.log(`[${sessionId}] Received transcript from client (${transcript.length} chars)`);
+    console.log(
+      `[${sessionId}] Received transcript from client (${transcript.length} chars)`
+    );
     console.log(`[${sessionId}] Preview: ${transcript.substring(0, 200)}...`);
 
     // Update session with transcript
@@ -55,7 +61,8 @@ export async function POST(req: NextRequest) {
     console.log(`[${sessionId}] Language detected: ${detectedLanguage}`);
 
     // Send to Make.com for translation & TTS
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://vubly.vercel.app";
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL || "https://vubly.vercel.app";
     const callbackUrl = `${baseUrl}/api/makecom-callback`;
 
     console.log(`[${sessionId}] Sending to Make.com webhook...`);

@@ -23,7 +23,9 @@ export async function extractCaptionsDirectly(
     });
 
     if (!response.ok) {
-      console.log(`[DirectCaption] Failed to fetch video page: ${response.status}`);
+      console.log(
+        `[DirectCaption] Failed to fetch video page: ${response.status}`
+      );
       return null;
     }
 
@@ -32,15 +34,15 @@ export async function extractCaptionsDirectly(
 
     // Step 2: Extract caption track URLs from the page
     // Look for "captionTracks" in the ytInitialPlayerResponse
-    const captionTracksMatch = html.match(
-      /"captionTracks":\s*(\[[\s\S]*?\])/
-    );
+    const captionTracksMatch = html.match(/"captionTracks":\s*(\[[\s\S]*?\])/);
 
     if (!captionTracksMatch) {
       console.log(`[DirectCaption] No captionTracks found in page`);
-      
+
       // Try alternative pattern (without 's' flag for compatibility)
-      const altMatch = html.match(/playerCaptionsTracklistRenderer[\s\S]*?captionTracks[\s\S]*?\[([\s\S]*?)\]/);
+      const altMatch = html.match(
+        /playerCaptionsTracklistRenderer[\s\S]*?captionTracks[\s\S]*?\[([\s\S]*?)\]/
+      );
       if (!altMatch) {
         console.log(`[DirectCaption] No captions available for this video`);
         return null;
@@ -53,20 +55,28 @@ export async function extractCaptionsDirectly(
       // Try to extract the full captionTracks array
       const tracksJson = captionTracksMatch![1];
       captionTracks = JSON.parse(tracksJson);
-      console.log(`[DirectCaption] Found ${captionTracks.length} caption tracks`);
+      console.log(
+        `[DirectCaption] Found ${captionTracks.length} caption tracks`
+      );
     } catch (e) {
       // Try regex extraction of baseUrl
-      const baseUrlMatches = html.matchAll(/"baseUrl"\s*:\s*"(https:\/\/www\.youtube\.com\/api\/timedtext[^"]+)"/g);
-      const urls = Array.from(baseUrlMatches, m => m[1].replace(/\\u0026/g, '&'));
-      
+      const baseUrlMatches = html.matchAll(
+        /"baseUrl"\s*:\s*"(https:\/\/www\.youtube\.com\/api\/timedtext[^"]+)"/g
+      );
+      const urls = Array.from(baseUrlMatches, (m) =>
+        m[1].replace(/\\u0026/g, "&")
+      );
+
       if (urls.length === 0) {
         console.log(`[DirectCaption] Could not parse caption URLs`);
         return null;
       }
-      
+
       // Create pseudo track objects
-      captionTracks = urls.map(url => ({ baseUrl: url }));
-      console.log(`[DirectCaption] Extracted ${captionTracks.length} caption URLs via regex`);
+      captionTracks = urls.map((url) => ({ baseUrl: url }));
+      console.log(
+        `[DirectCaption] Extracted ${captionTracks.length} caption URLs via regex`
+      );
     }
 
     if (captionTracks.length === 0) {
@@ -76,30 +86,30 @@ export async function extractCaptionsDirectly(
 
     // Step 3: Find English captions (prefer manual, then auto-generated)
     let captionUrl = null;
-    
+
     // First try to find English manual captions
     for (const track of captionTracks) {
-      const langCode = track.languageCode || '';
-      const kind = track.kind || '';
-      if (langCode.startsWith('en') && kind !== 'asr') {
+      const langCode = track.languageCode || "";
+      const kind = track.kind || "";
+      if (langCode.startsWith("en") && kind !== "asr") {
         captionUrl = track.baseUrl;
         console.log(`[DirectCaption] Found manual English captions`);
         break;
       }
     }
-    
+
     // Fall back to auto-generated
     if (!captionUrl) {
       for (const track of captionTracks) {
-        const langCode = track.languageCode || '';
-        if (langCode.startsWith('en')) {
+        const langCode = track.languageCode || "";
+        if (langCode.startsWith("en")) {
           captionUrl = track.baseUrl;
           console.log(`[DirectCaption] Found auto-generated English captions`);
           break;
         }
       }
     }
-    
+
     // Fall back to any caption
     if (!captionUrl && captionTracks[0]?.baseUrl) {
       captionUrl = captionTracks[0].baseUrl;
@@ -112,8 +122,10 @@ export async function extractCaptionsDirectly(
     }
 
     // Decode the URL (it may be escaped)
-    captionUrl = captionUrl.replace(/\\u0026/g, '&');
-    console.log(`[DirectCaption] Fetching captions from: ${captionUrl.substring(0, 100)}...`);
+    captionUrl = captionUrl.replace(/\\u0026/g, "&");
+    console.log(
+      `[DirectCaption] Fetching captions from: ${captionUrl.substring(0, 100)}...`
+    );
 
     // Step 4: Fetch the caption XML
     const captionResponse = await fetch(captionUrl, {
@@ -125,7 +137,9 @@ export async function extractCaptionsDirectly(
     });
 
     if (!captionResponse.ok) {
-      console.log(`[DirectCaption] Failed to fetch captions: ${captionResponse.status}`);
+      console.log(
+        `[DirectCaption] Failed to fetch captions: ${captionResponse.status}`
+      );
       return null;
     }
 
@@ -136,8 +150,12 @@ export async function extractCaptionsDirectly(
     const transcript = parseTimedTextXml(captionXml);
 
     if (transcript && transcript.length > 50) {
-      console.log(`[DirectCaption] ✅ Extracted ${transcript.length} chars of transcript`);
-      console.log(`[DirectCaption] Preview: ${transcript.substring(0, 200)}...`);
+      console.log(
+        `[DirectCaption] ✅ Extracted ${transcript.length} chars of transcript`
+      );
+      console.log(
+        `[DirectCaption] Preview: ${transcript.substring(0, 200)}...`
+      );
       return transcript;
     }
 
@@ -187,7 +205,9 @@ function decodeHtmlEntities(text: string): string {
     .replace(/&#39;/g, "'")
     .replace(/&apos;/g, "'")
     .replace(/&#(\d+);/g, (_, num) => String.fromCharCode(parseInt(num, 10)))
-    .replace(/&#x([a-fA-F0-9]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&#x([a-fA-F0-9]+);/g, (_, hex) =>
+      String.fromCharCode(parseInt(hex, 16))
+    )
     .replace(/\n/g, " ")
     .replace(/\s+/g, " ");
 }

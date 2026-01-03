@@ -38,7 +38,9 @@ function extractVideoId(url: string): string | null {
 }
 
 // Client-side caption extraction using YouTube's timedtext API
-async function fetchCaptionsClientSide(videoId: string): Promise<string | null> {
+async function fetchCaptionsClientSide(
+  videoId: string
+): Promise<string | null> {
   console.log("[Client] Fetching captions for:", videoId);
 
   try {
@@ -61,7 +63,10 @@ async function fetchCaptionsClientSide(videoId: string): Promise<string | null> 
             // Parse XML caption format
             const transcript = parseXmlCaptions(text);
             if (transcript && transcript.length > 50) {
-              console.log("[Client] ✅ Got captions:", transcript.substring(0, 100));
+              console.log(
+                "[Client] ✅ Got captions:",
+                transcript.substring(0, 100)
+              );
               return transcript;
             }
           }
@@ -125,69 +130,23 @@ export default function VideoUpload() {
 
     setError("");
     setLoading(true);
-    setStatus("Extracting captions from YouTube...");
+    setStatus("Downloading video and transcribing with AI...");
 
     try {
-      // Step 1: Try to get captions client-side
-      let transcript = await fetchCaptionsClientSide(videoId);
-
-      // Step 2: If client-side fails, try server-side (fallback)
-      if (!transcript) {
-        setStatus("Trying server-side caption extraction...");
-        
-        // Try server endpoint which has the previewText
-        const checkResponse = await fetch("/api/check-captions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ youtubeUrl: youtubeLink }),
-        });
-
-        const checkData = await checkResponse.json();
-        
-        if (checkData.hasCaptions) {
-          // Server got captions, use the regular process endpoint
-          setStatus("Processing video...");
-          const response = await fetch("/api/process", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              youtubeUrl: youtubeLink,
-              targetLanguage,
-              voiceId,
-            }),
-          });
-
-          const data = await response.json();
-          if (!response.ok) {
-            throw new Error(data.error || "Processing failed");
-          }
-          router.push(`/dashboard?session=${data.sessionId}`);
-          return;
-        }
-      }
-
-      if (!transcript) {
-        throw new Error(
-          "Could not extract captions from this video. Please make sure the video has captions enabled (look for the CC button on YouTube)."
-        );
-      }
-
-      // Step 3: Send transcript to server for processing
-      setStatus("Sending to translation service...");
-
-      const response = await fetch("/api/process-with-transcript", {
+      // NEW SIMPLIFIED WORKFLOW:
+      // Just call /api/process which downloads via third-party + transcribes with Whisper
+      const response = await fetch("/api/process", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           youtubeUrl: youtubeLink,
           targetLanguage,
           voiceId,
-          transcript,
         }),
       });
 
       const data = await response.json();
-
+      
       if (!response.ok) {
         throw new Error(data.error || "Processing failed");
       }
@@ -306,7 +265,8 @@ export default function VideoUpload() {
               <div className="text-center text-gray-400 text-sm">
                 <p>This may take a few minutes...</p>
                 <p className="mt-2">
-                  We&apos;re extracting captions and sending them for translation.
+                  We&apos;re extracting captions and sending them for
+                  translation.
                 </p>
               </div>
             )}

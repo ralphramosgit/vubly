@@ -157,7 +157,10 @@ function parseSubtitleFile(content: string): string {
   let text = content
     .replace(/^WEBVTT[\s\S]*?\n\n/, "") // Remove VTT header
     .replace(/^\d+\n/gm, "") // Remove SRT sequence numbers
-    .replace(/\d{2}:\d{2}:\d{2}[.,]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[.,]\d{3}/g, "") // Remove timestamps
+    .replace(
+      /\d{2}:\d{2}:\d{2}[.,]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[.,]\d{3}/g,
+      ""
+    ) // Remove timestamps
     .replace(/<[^>]+>/g, "") // Remove HTML tags
     .replace(/\{[^}]+\}/g, "") // Remove style tags
     .replace(/\n{2,}/g, " ") // Replace multiple newlines with space
