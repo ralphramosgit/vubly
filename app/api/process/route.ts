@@ -71,57 +71,53 @@ async function processVideoAndTriggerWebhook(
   voiceId: string
 ) {
   try {
-    // Step 1: Download audio and video in parallel with timeout
-    console.log(`[${sessionId}] Downloading audio and video...`);
-    await updateSession(sessionId, { status: "processing" });
-
-    // Try to download both, but don't fail if video fails
-    let audioBuffer: Buffer;
-    let videoBuffer: Buffer | null = null;
-    
-    try {
-      const [audio, video] = await Promise.allSettled([
-        downloadAudio(videoId),
-        downloadVideo(videoId),
-      ]);
-      
-      if (audio.status === "fulfilled") {
-        audioBuffer = audio.value;
-        console.log(`[${sessionId}] Audio downloaded: ${audioBuffer.length} bytes`);
-      } else {
-        throw new Error(`Audio download failed: ${audio.reason}`);
-      }
-      
-      if (video.status === "fulfilled") {
-        videoBuffer = video.value;
-        console.log(`[${sessionId}] Video downloaded: ${videoBuffer.length} bytes`);
-      } else {
-        console.warn(`[${sessionId}] Video download failed (non-fatal): ${video.reason}`);
-        console.log(`[${sessionId}] Continuing without video...`);
-      }
-    } catch (error) {
-      console.error(`[${sessionId}] Download error:`, error);
-      throw error;
-    }
-
-    await updateSession(sessionId, { 
-      originalAudio: audioBuffer, 
-      videoBuffer: videoBuffer || undefined 
-    });
-
-    // Step 2: Try to get transcript from YouTube captions first
+    // Step 1: Try to get transcript from YouTube captions first
     console.log(`[${sessionId}] Checking for YouTube captions...`);
     let transcript = "";
     
     const youtubeTranscript = await getYouTubeTranscript(videoId);
     
     if (youtubeTranscript) {
-      console.log(`[${sessionId}] Using YouTube captions as transcript`);
+      console.log(`[${sessionId}] ✅ Using YouTube captions as transcript`);
       transcript = youtubeTranscript;
-      await updateSession(sessionId, { transcript });
+      await updateSession(sessionId, { transcript, status: "processing" });
+    }
+
+    // Step 2: Download audio and video (skip audio if we have transcript)
+    let audioBuffer: Buffer | null = null;
+    let videoBuffer: Buffer | null = null;
+    
+    if (!transcript) {
+      // Only download audio if we don't have transcript
+      console.log(`[${sessionId}] No captions found, downloading audio for transcription...`);
+      try {
+        audioBuffer = await downloadAudio(videoId);
+        console.log(`[${sessionId}] Audio downloaded: ${audioBuffer.length} bytes`);
+      } catch (audioError) {
+        console.error(`[${sessionId}] Audio download failed:`, audioError);
+        throw new Error("No transcript available and audio download failed");
+      }
     } else {
-      // No captions available, transcribe audio
-      console.log(`[${sessionId}] No captions found, transcribing audio...`);
+      console.log(`[${sessionId}] Skipping audio download (have transcript from YouTube)`);
+    }
+    
+    // Try to download video (non-fatal if fails)
+    try {
+      videoBuffer = await downloadVideo(videoId);
+      console.log(`[${sessionId}] Video downloaded: ${videoBuffer.length} bytes`);
+    } catch (videoError) {
+      console.warn(`[${sessionId}] Video download failed (non-fatal):`, videoError);
+      console.log(`[${sessionId}] Continuing without video...`);
+    }
+
+    await updateSession(sessionId, { 
+      originalAudio: audioBuffer || undefined,
+      videoBuffer: videoBuffer || undefined 
+    });
+
+    // Step 3: Transcribe audio if we didn't get YouTube transcript
+    if (!transcript && audioBuffer) {
+      console.log(`[${sessionId}] Transcribing audio...`);
       try {
         const transcription = await transcribeAudio(audioBuffer);
         transcript = transcription.text;
@@ -135,7 +131,11 @@ async function processVideoAndTriggerWebhook(
       }
     }
 
-    // Step 3: Detect language
+    if (!transcript) {
+      throw new Error("Failed to obtain transcript from any source");
+    }
+
+    // Step 4: Detect language
     console.log(`[${sessionId}] Starting language detection...`);
     let detectedLanguage = "en";
     try {
